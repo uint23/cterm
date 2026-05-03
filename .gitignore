@@ -1,0 +1,6 @@
+compile_flags.txt
+cterm
+*.o
+*.swp
+*.swo
+
