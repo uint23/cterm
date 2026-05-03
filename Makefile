@@ -1,13 +1,13 @@
 CC = cc
-
 CFLAGS = -std=c99 -Wall -Wextra
 CPPFLAGS = -Isource/external -Isource/include
+LDFLAGS = -framework Cocoa -framework CoreVideo -framework IOKit -framework CoreGraphics -framework CoreFoundation -framework Carbon
 
 SRCS = source/cterm.c
 OUT = cterm
 
 all:
-	${CC} ${SRCS} -o ${OUT}
+	${CC} ${SRCS} ${CFLAGS} ${CPPFLAGS} ${LDFLAGS} -o ${OUT}
 
 clean:
 	rm -f ${OUT}
