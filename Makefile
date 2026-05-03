@@ -1,7 +1,7 @@
 CC = cc
 
 CFLAGS = -std=c99 -Wall -Wextra
-CPPFLAGS =
+CPPFLAGS = -Isource/external -Isource/include
 
 SRCS = source/cterm.c
 OUT = cterm
