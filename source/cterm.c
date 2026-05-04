@@ -18,8 +18,22 @@ RGFW_window* win = NULL;
 RGFW_surface* surf = NULL;
 uint32_t* pixels = NULL;
 
+static void cleanup(void);
 static void init(void);
 static void run(void);
+
+/**
+ * @brief release resources, close window (TODO)
+ */
+static void cleanup(void)
+{
+	if (surf)
+		RGFW_surface_free(surf);
+	if (pixels)
+		free(pixels);
+	if (win)
+		RGFW_window_close(win);
+}
 
 /**
  * @brief initialise: window (TODO)
@@ -67,6 +81,7 @@ int main(int argc, char* argv[])
 	/* TODO: pledges */
 	init();
 	run();
+	cleanup();
 
 	return EXIT_SUCCESS;
 	(void) argc, (void) argv;
