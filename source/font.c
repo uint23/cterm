@@ -47,6 +47,8 @@ static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
 int font_load(Font* f, const char* path, double size)
 {
 	SFT_LMetrics lm;
+	SFT_Glyph glyph;
+	SFT_GMetrics gm;
 
 	if (!f || !path || size <= 0)
 		return -1;
@@ -73,6 +75,18 @@ int font_load(Font* f, const char* path, double size)
 	}
 	f->asc = lm.ascender;
 	f->dsc = lm.descender;
+
+	/* cell width/height */
+	f->cellh = (int)(lm.ascender - lm.descender + lm.lineGap + 0.5);
+
+	if (sft_lookup(&f->sft, 'A', &glyph) < 0)
+		return -1;
+	if (sft_gmetrics(&f->sft, glyph, &gm) < 0)
+		return -1;
+
+	f->cellw = (int)(gm.advanceWidth + 0.5);
+	if (f->cellw <= 0 || f->cellh <= 0)
+		return -1;
 	
 	return 0;
 }

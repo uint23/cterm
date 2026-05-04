@@ -9,9 +9,11 @@ typedef struct {
 	SFT_Font*     font;
 	SFT           sft;
 	double        size;
-	double        asc; /* ascent */
-	double        dsc; /* descent */
-	bool          aa;  /* anti-aliasing */
+	double        asc;   /* ascent */
+	double        dsc;   /* descent */
+	int           cellw;
+	int           cellh;
+	bool          aa;    /* anti-aliasing */
 } Font;
 
 /**

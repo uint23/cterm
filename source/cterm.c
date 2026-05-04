@@ -12,8 +12,6 @@
 
 #define WIDTH  800
 #define HEIGHT 600
-#define CELLW  18
-#define CELLH  32
 
 Font font;
 RGFW_window* win = NULL;
@@ -59,7 +57,8 @@ static void init(void)
 		die(1, "failed to create window surface");
 
 	/* font */
-	if (font_load(&font, "/System/Library/Fonts/Supplemental/Andale Mono.ttf", 24.0) < 0)
+	/* TODO: paths */
+	if (font_load(&font, "/System/Library/Fonts/Supplemental/Andale Mono.ttf", 48.0) < 0)
 		die(1, "failed to load font");
 	font.aa = false;
 }
@@ -77,23 +76,23 @@ static void run(void)
 
 		draw_clear(pixels, WIDTH, HEIGHT, rgba(0, 0, 0, 255)); /* TODO: opacity */
 
-		draw_cell(pixels, WIDTH, HEIGHT, 0, 0, CELLW, CELLH, rgba(255, 0, 0, 255));
-		draw_cell(pixels, WIDTH, HEIGHT, 1, 0, CELLW, CELLH, rgba(0, 255, 0, 255));
-		draw_cell(pixels, WIDTH, HEIGHT, 2, 0, CELLW, CELLH, rgba(0, 0, 255, 255));
-		draw_cursor(pixels, WIDTH, HEIGHT, 3, 0, CELLW, CELLH, rgba(255, 255, 255, 255));
+		draw_cell(pixels, WIDTH, HEIGHT, 0, 0, font.cellw, font.cellh, rgba(255, 0, 0, 255));
+		draw_cell(pixels, WIDTH, HEIGHT, 1, 0, font.cellw, font.cellh, rgba(0, 255, 0, 255));
+		draw_cell(pixels, WIDTH, HEIGHT, 2, 0, font.cellw, font.cellh, rgba(0, 0, 255, 255));
+		draw_cursor(pixels, WIDTH, HEIGHT, 3, 0, font.cellw, font.cellh, rgba(255, 255, 255, 255));
 
 		/* text */
 		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				0 * CELLW, (int)font.asc, 'r', rgba(0, 0, 0, 255));
+				0 * font.cellw, (int)font.asc, 'r', rgba(0, 0, 0, 255));
 
 		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				1 * CELLW, (int)font.asc, 'g', rgba(0, 0, 0, 255));
+				1 * font.cellw, (int)font.asc, 'g', rgba(0, 0, 0, 255));
 
 		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				2 * CELLW, (int)font.asc, 'b', rgba(0, 0, 0, 255));
+				2 * font.cellw, (int)font.asc, 'b', rgba(0, 0, 0, 255));
 
 		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				3 * CELLW, (int)font.asc, 'c', rgba(0, 0, 0, 255));
+				3 * font.cellw, (int)font.asc, 'c', rgba(0, 0, 0, 255));
 
 		RGFW_window_blitSurface(win, surf);
 	}
