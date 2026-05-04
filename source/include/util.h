@@ -1,6 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /**
@@ -22,6 +23,13 @@ void die(int ec, const char* msg);
  * @return packed rbga value
  */
 uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+
+/**
+ * @brief allocate or die
+ *
+ * @param len bytes to allocate
+ */
+void* xmalloc(size_t len);
 
 #endif /* UTIL_H */
 
