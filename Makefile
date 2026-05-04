@@ -4,7 +4,8 @@ CPPFLAGS = -Isource/external -Isource/include
 LDFLAGS = -framework Cocoa -framework CoreVideo -framework IOKit -framework CoreGraphics -framework CoreFoundation -framework Carbon
 
 SRCS = source/cterm.c \
-       source/util.c
+       source/util.c  \
+       source/draw.c
 OUT = cterm
 
 all:
