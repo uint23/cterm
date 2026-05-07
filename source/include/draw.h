@@ -22,7 +22,7 @@ void draw_clear(uint32_t* dst, int w, int h, uint32_t col);
  * @param w width of buffer
  * @param h height of buffer
  * @param cl cell column
- * @param cr cell row
+ * @param rw cell row
  * @param cw cell width
  * @param ch cell height
  * @param bg cell background colour
@@ -37,7 +37,7 @@ void draw_cell(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
  * @param w width of buffer
  * @param h height of buffer
  * @param cl cell column
- * @param cr cell row
+ * @param rw cell row
  * @param cw cell width
  * @param ch cell height
  * @param fg cell foreground colour

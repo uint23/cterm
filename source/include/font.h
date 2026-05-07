@@ -22,6 +22,8 @@ typedef struct {
  * @param f font struct to write info to
  * @param path font path
  * @param size size of font
+ *
+ * @return 1=success, -1=failed
  */
 int font_load(Font* f, const char* path, double size);
 
