@@ -68,11 +68,9 @@ int font_load(Font* f, const char* path, double size)
 	f->sft.flags = SFT_DOWNWARD_Y;
 
 	/* get font line metrics */
-	if (sft_lmetrics(&f->sft, &lm) < 0) {
-		sft_freefont(f->font);
-		memset(f, 0, sizeof(*f));
-		return -1;
-	}
+	if (sft_lmetrics(&f->sft, &lm) < 0)
+		goto fail;
+
 	f->asc = lm.ascender;
 	f->dsc = lm.descender;
 
@@ -80,15 +78,19 @@ int font_load(Font* f, const char* path, double size)
 	f->cellh = (int)(lm.ascender - lm.descender + lm.lineGap + 0.5);
 
 	if (sft_lookup(&f->sft, 'A', &glyph) < 0)
-		return -1;
+		goto fail;
 	if (sft_gmetrics(&f->sft, glyph, &gm) < 0)
-		return -1;
+		goto fail;
 
 	f->cellw = (int)(gm.advanceWidth + 0.5);
 	if (f->cellw <= 0 || f->cellh <= 0)
-		return -1;
+		goto fail;
 	
 	return 0;
+
+fail:
+	font_free(f);
+	return -1;
 }
 
 void font_free(Font* f)
