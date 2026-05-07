@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "font.h"
+
 /* TODO: proper structs and faster drawing with damage for drawing shaepes*/
 
 /**
@@ -46,6 +48,21 @@ void draw_cell(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
  */
 void draw_cursor(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
                  uint32_t fg);
+
+/**
+ * @brief draw one codepoint to buffer
+ *
+ * @param f font to draw from
+ * @param dst destination buffer
+ * @param w buffer width
+ * @param h buffer height
+ * @param x x-position to draw at
+ * @param baseline text baseline y-position
+ * @param cp (unicode) codepoint to draw
+ * @param fg foreground colour
+ */
+void draw_codepoint(Font* f, uint32_t* dst, int w, int h, int x,
+                         int baseline, uint32_t cp, uint32_t fg);
 
 #endif /* DRAW_H */
 

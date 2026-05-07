@@ -82,16 +82,16 @@ static void run(void)
 		draw_cursor(pixels, WIDTH, HEIGHT, 3, 0, font.cellw, font.cellh, rgba(255, 255, 255, 255));
 
 		/* text */
-		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
+		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
 				0 * font.cellw, (int)font.asc, 'r', rgba(0, 0, 0, 255));
 
-		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				1 * font.cellw, (int)font.asc, 'g', rgba(0, 0, 0, 255));
+		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
+		   	1 * font.cellw, (int)font.asc, 'g', rgba(0, 0, 0, 255));
 
-		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				2 * font.cellw, (int)font.asc, 'b', rgba(0, 0, 0, 255));
+		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
+		   	2 * font.cellw, (int)font.asc, 'b', rgba(0, 0, 0, 255));
 
-		font_draw_codepoint(&font, pixels, WIDTH, HEIGHT,
+		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
 				3 * font.cellw, (int)font.asc, 'c', rgba(0, 0, 0, 255));
 
 		RGFW_window_blitSurface(win, surf);

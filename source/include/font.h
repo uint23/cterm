@@ -34,20 +34,5 @@ int font_load(Font* f, const char* path, double size);
  */
 void font_free(Font* f);
 
-/**
- * @brief draw one codepoint to buffer
- *
- * @param f font to draw from
- * @param dst destination buffer
- * @param w buffer width
- * @param h buffer height
- * @param x x-position to draw at
- * @param baseline text baseline y-position
- * @param cp (unicode) codepoint to draw
- * @param fg foreground colour
- */
-void font_draw_codepoint(Font* f, uint32_t* dst, int w, int h, int x,
-                         int baseline, uint32_t cp, uint32_t fg);
-
 #endif /* FONT_H */
 
