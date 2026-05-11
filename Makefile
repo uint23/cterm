@@ -6,6 +6,7 @@ LDFLAGS = -lschrift -lgrapheme -framework Cocoa -framework CoreVideo -framework 
 SRCS = source/cterm.c \
        source/util.c  \
        source/font.c  \
+       source/term.c  \
        source/draw.c
 OUT = cterm
 

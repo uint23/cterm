@@ -8,15 +8,30 @@
 
 #include "draw.h"
 #include "font.h"
+#include "term.h"
 #include "util.h"
 
 #define WIDTH  800
 #define HEIGHT 600
 
-Font font;
-RGFW_window* win = NULL;
-RGFW_surface* surf = NULL;
-uint32_t* pixels = NULL;
+#define COLS   80
+#define ROWS   24
+
+static Font font;
+static Cursor cur;
+static RGFW_window* win = NULL;
+static RGFW_surface* surf = NULL;
+static uint32_t* pixels = NULL;
+
+static struct Cell termcells[COLS*ROWS];
+static Term term = {
+	.cells = termcells,
+	.cols = COLS,
+	.rows = ROWS,
+	.ptyfd = -1, /* TODO: pty */
+	.fg = 0xffffffff,
+	.bg = 0xff222222,
+};
 
 static void cleanup(void);
 static void init(void);
@@ -58,9 +73,17 @@ static void init(void)
 
 	/* font */
 	/* TODO: paths */
-	if (font_load(&font, "/System/Library/Fonts/Supplemental/Andale Mono.ttf", 48.0) < 0)
+	if (font_load(&font, "/System/Library/Fonts/Supplemental/Andale Mono.ttf", 24.0) < 0)
 		die(1, "failed to load font");
 	font.aa = false;
+
+	/* tmp */
+	term_clear(&term, &cur);
+	const char* s =
+		"cterm test\n"
+		"terminal buffer!";
+	for (const char* p = s; *p; p++)
+		term_putc(&term, &cur, (unsigned char)*p);
 }
 
 /**
@@ -74,25 +97,31 @@ static void run(void)
 		while (RGFW_window_checkEvent(win, &ev))
 			;
 
-		draw_clear(pixels, WIDTH, HEIGHT, rgba(0, 0, 0, 255)); /* TODO: opacity */
+		draw_clear(pixels, WIDTH, HEIGHT, rgba(0, 0, 0, 255));
 
-		draw_cell(pixels, WIDTH, HEIGHT, 0, 0, font.cellw, font.cellh, rgba(255, 0, 0, 255));
-		draw_cell(pixels, WIDTH, HEIGHT, 1, 0, font.cellw, font.cellh, rgba(0, 255, 0, 255));
-		draw_cell(pixels, WIDTH, HEIGHT, 2, 0, font.cellw, font.cellh, rgba(0, 0, 255, 255));
-		draw_cursor(pixels, WIDTH, HEIGHT, 3, 0, font.cellw, font.cellh, rgba(255, 255, 255, 255));
+		for (int y = 0; y < term.rows; y++) {
+			for (int x = 0; x < term.cols; x++) {
+				struct Cell* cell = &CELL(&term, x, y);
 
-		/* text */
-		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				0 * font.cellw, (int)font.asc, 'r', rgba(0, 0, 0, 255));
+				draw_cell(pixels, WIDTH, HEIGHT,
+				          x, y,
+				          font.cellw, font.cellh,
+				          cell->bg);
 
-		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-		   	1 * font.cellw, (int)font.asc, 'g', rgba(0, 0, 0, 255));
+				if (cell->cp != ' ') {
+					draw_codepoint(&font, pixels, WIDTH, HEIGHT,
+					               x * font.cellw,
+					               y * font.cellh + (int)font.asc,
+					               cell->cp,
+					               cell->fg);
+				}
+			}
+		}
 
-		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-		   	2 * font.cellw, (int)font.asc, 'b', rgba(0, 0, 0, 255));
-
-		draw_codepoint(&font, pixels, WIDTH, HEIGHT,
-				3 * font.cellw, (int)font.asc, 'c', rgba(0, 0, 0, 255));
+		draw_cursor(pixels, WIDTH, HEIGHT,
+		            cur.x, cur.y,
+		            font.cellw, font.cellh,
+		            rgba(255, 255, 255, 255));
 
 		RGFW_window_blitSurface(win, surf);
 	}
