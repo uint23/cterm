@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int font_load(Font* f, const char* path, double size)
+int font_load(Fontface* f, const char* path, double size)
 {
 	SFT_LMetrics lm;
 	SFT_Glyph glyph;
@@ -53,7 +53,7 @@ fail:
 	return -1;
 }
 
-void font_free(Font* f)
+void font_free(Fontface* f)
 {
 	if (!f)
 		return;

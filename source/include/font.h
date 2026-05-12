@@ -14,7 +14,7 @@ typedef struct {
 	int           cellw;
 	int           cellh;
 	bool          aa;    /* anti-aliasing */
-} Font;
+} Fontface;
 
 /**
  * @brief load font from path
@@ -25,14 +25,14 @@ typedef struct {
  *
  * @return 1=success, -1=failed
  */
-int font_load(Font* f, const char* path, double size);
+int font_load(Fontface* f, const char* path, double size);
 
 /**
  * @brief free a loaded font
  *
  * @param f font struct to free
  */
-void font_free(Font* f);
+void font_free(Fontface* f);
 
 #endif /* FONT_H */
 

@@ -4,23 +4,23 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* resolve 1D cell from 2D input */ 
-#define CELL(t, x, y) ((t)->cells[(y) * (t)->cols + (x)])
+/* resolve 1D rune from 2D input */ 
+#define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
 
-struct Cell {
+typedef struct {
 	uint32_t       cp;  /* codepoint */
 	uint32_t       fg;
 	uint32_t       bg;
-	bool           dmg; /* cell damaged */
-};
+	bool           dmg; /* rune damaged */
+} Rune;
 
 typedef struct {
 	int            x;
 	int            y;
-} Cursor;
+} Caret;
 
 typedef struct {
-	struct Cell*   cells;
+	Rune*          runes;
 	uint32_t       fg;
 	uint32_t       bg;
 	int            cols;
@@ -29,13 +29,13 @@ typedef struct {
 } Term;
 
 /**
- * @brief clear screen by filling cells with ' ' and reseting
+ * @brief clear screen by filling runes with ' ' and reseting
  *        to default terminal foreground and background
  *
  * @param t terminal instance to scroll
  * @param c cursor instance to position
  */
-void term_clear(Term* t, Cursor* c);
+void term_clear(Term* t, Caret* c);
 
 /**
  * @brief handle placing special and normal characters
@@ -44,7 +44,7 @@ void term_clear(Term* t, Cursor* c);
  * @param c cursor instance
  * @param cp codepoint to place
  */
-void term_putc(Term* t, Cursor* c, uint32_t cp);
+void term_putc(Term* t, Caret* c, uint32_t cp);
 
 /**
  * @brief scroll viewport down by one

@@ -17,15 +17,15 @@
 #define COLS   80
 #define ROWS   24
 
-static Font font;
-static Cursor cur;
+static Fontface font;
+static Caret car;
 static RGFW_window* win = NULL;
 static RGFW_surface* surf = NULL;
 static uint32_t* pixels = NULL;
 
-static struct Cell termcells[COLS*ROWS];
+static Rune runes[COLS*ROWS]; /* TODO: dynamic */
 static Term term = {
-	.cells = termcells,
+	.runes = runes,
 	.cols = COLS,
 	.rows = ROWS,
 	.ptyfd = -1, /* TODO: pty */
@@ -73,17 +73,17 @@ static void init(void)
 
 	/* font */
 	/* TODO: paths */
-	if (font_load(&font, "/System/Library/Fonts/Supplemental/Andale Mono.ttf", 24.0) < 0)
+	if (font_load(&font, "./Xanh.ttf", 24.0) < 0)
 		die(1, "failed to load font");
 	font.aa = false;
 
 	/* tmp */
-	term_clear(&term, &cur);
+	term_clear(&term, &car);
 	const char* s =
 		"cterm test\n"
 		"terminal buffer!";
 	for (const char* p = s; *p; p++)
-		term_putc(&term, &cur, (unsigned char)*p);
+		term_putc(&term, &car, (unsigned char)*p);
 }
 
 /**
@@ -101,25 +101,25 @@ static void run(void)
 
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
-				struct Cell* cell = &CELL(&term, x, y);
+				Rune* rune  = &RUNE(&term, x, y);
 
-				draw_cell(pixels, WIDTH, HEIGHT,
+				draw_rune(pixels, WIDTH, HEIGHT,
 				          x, y,
 				          font.cellw, font.cellh,
-				          cell->bg);
+				          rune->bg);
 
-				if (cell->cp != ' ') {
+				if (rune->cp != ' ') {
 					draw_codepoint(&font, pixels, WIDTH, HEIGHT,
 					               x * font.cellw,
 					               y * font.cellh + (int)font.asc,
-					               cell->cp,
-					               cell->fg);
+					               rune->cp,
+					               rune->fg);
 				}
 			}
 		}
 
-		draw_cursor(pixels, WIDTH, HEIGHT,
-		            cur.x, cur.y,
+		draw_caret(pixels, WIDTH, HEIGHT,
+		            car.x, car.y,
 		            font.cellw, font.cellh,
 		            rgba(255, 255, 255, 255));
 

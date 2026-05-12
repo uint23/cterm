@@ -3,6 +3,7 @@
 
 #include "util.h"
 
+/* TODO: stdarg */
 void die(int ec, const char* msg)
 {
 	perror(msg);
