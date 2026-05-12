@@ -1,7 +1,13 @@
 CC = cc
 CFLAGS = -std=c99 -Wall -Wextra
 CPPFLAGS = -Isource/external -Isource/include
-LDFLAGS = -lschrift -lgrapheme -framework Cocoa -framework CoreVideo -framework IOKit -framework CoreGraphics -framework CoreFoundation -framework Carbon
+LDFLAGS = -lschrift -lgrapheme -lm
+
+# X11
+#LDFLAGS += -lX11 -lXrandr
+
+# macOS
+# LDFLAGS += -framework Cocoa -framework CoreVideo -framework IOKit -framework CoreGraphics -framework CoreFoundation -framework Carbon
 
 SRCS = source/cterm.c \
        source/util.c  \
