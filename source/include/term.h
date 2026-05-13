@@ -61,6 +61,10 @@ void term_clear(Term* t, Caret* c);
  */
 void term_putc(Term* t, Caret* c, uint32_t cp);
 
+/** TODO
+ */
+int term_resize(Term* t, Caret* c, int cols, int rows);
+
 /**
  * @brief scroll viewport up by one
  *

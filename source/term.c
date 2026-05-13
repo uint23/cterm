@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <grapheme.h>
@@ -249,6 +250,63 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 
 		break;
 	}
+}
+
+int term_resize(Term* t, Caret* c, int cols, int rows)
+{
+	/* old */
+	Rune* or = t->runes;
+	int ocols = t->cols;
+	int orows = t->rows;
+
+	if (cols < 1)
+		cols = 1;
+	if (rows < 1)
+		rows = 1;
+
+	/* new */
+	Rune* nr = calloc(cols*rows, sizeof(*nr));
+	if (!nr)
+		return -1;
+
+	for (int y = 0; y < rows; y++) {
+		for (int x = 0; x < cols; x++) {
+			Rune* r = &nr[y * cols + x];
+			r->cp = ' ';
+			r->fg = t->fg;
+			r->bg = t->bg;
+			r->dmg = true;
+		}
+	}
+
+	if (or) {
+		int copyrows = orows < rows ? orows : rows;
+		int copycols = ocols < cols ? ocols : cols;
+
+		for (int y = 0; y < copyrows; y++) {
+			memcpy(
+				&nr[y * cols], &or[y * ocols],
+				sizeof(Rune) * copycols
+			);
+		}
+	}
+
+	free(or);
+
+	t->runes = nr;
+	t->cols = cols;
+	t->rows = rows;
+
+	if (c->x >= cols)
+		c->x = cols - 1;
+	if (c->y >= rows)
+		c->y = rows - 1;
+	if (c->x < 0)
+		c->x = 0;
+	if (c->y < 0)
+		c->y = 0;
+
+	return 0;
 }
 
 void term_scroll(Term* t)

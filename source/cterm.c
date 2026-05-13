@@ -19,23 +19,21 @@
 #include "term.h"
 #include "utils.h"
 
-#define WIDTH  800
-#define HEIGHT 600
-
-#define COLS   80
-#define ROWS   24
+#define START_COLS   80
+#define START_ROWS   24
 
 static Fontface font;
 static Caret car;
 static RGFW_window* win = NULL;
 static RGFW_surface* surf = NULL;
 static uint32_t* pixels = NULL;
+static int winw;
+static int winh;
 
-static Rune runes[COLS*ROWS]; /* TODO: dynamic */
 static Term term = {
-	.runes = runes,
-	.cols = COLS,
-	.rows = ROWS,
+	.runes = NULL,
+	.cols = 0,
+	.rows = 0,
 	.ptyfd = -1,
 	.ptypid = -1,
 	.fg = 0xffffffff,
@@ -47,6 +45,9 @@ static void handle_key(RGFW_event ev);
 static void init(void);
 static void ptyread(void);
 static void ptywrite(const char* s, size_t n);
+static void resize_pty(void);
+static int resize_surface(int w, int h);
+static void resize_terminal(int w, int h);
 static void run(void);
 
 /**
@@ -54,6 +55,7 @@ static void run(void);
  */
 static void cleanup(void)
 {
+	free(term.runes);
 	font_free(&font);
 
 	if (surf)
@@ -104,12 +106,38 @@ static void handle_key(RGFW_event ev)
  */
 static void init(void)
 {
+	/* font */
+	/* TODO: paths */
+	if (font_load(&font, "./Xanh.ttf", 24.0) < 0)
+		die(1, "failed to load font");
+	font.aa = true;
+
+	winw = START_COLS*font.cellw;
+	winh = START_ROWS*font.cellh;
+
+	if (term_resize(&term, &car, START_COLS, START_ROWS) < 0)
+		die(1, "failed to resize terminal");
+
+	/* window */
+	if (!(win = RGFW_createWindow("cterm", 0, 0, winw, winh, 0)))
+		die(1, "failed to create window");
+
+	pixels = calloc(winw*winh, sizeof(*pixels));
+	if (!pixels)
+		die(1, "failed to alloc pixel buffer");
+
+	surf = RGFW_window_createSurface(
+		win, (u8*)pixels, winw, winh, RGFW_formatRGBA8
+	);
+	if (!surf)
+		die(1, "failed to create window surface");
+
 	/* pty */
 	struct winsize ws = {
-		.ws_col = COLS,
-		.ws_row = ROWS,
-		.ws_xpixel = WIDTH,
-		.ws_ypixel = HEIGHT
+		.ws_col = term.cols,
+		.ws_row = term.rows,
+		.ws_xpixel = winw,
+		.ws_ypixel = winh
 	};
 	term.ptypid = forkpty(&term.ptyfd, NULL, NULL, &ws);
 	if (term.ptypid < 0)
@@ -125,25 +153,6 @@ static void init(void)
 	if (flags >= 0) /* append to existing flags */
 		fcntl(term.ptyfd, F_SETFL, flags|O_NONBLOCK);
 
-	/* window */
-	if (!(win = RGFW_createWindow("cterm", 0, 0, 800, 600, 0)))
-		die(1, "failed to create window");
-
-	pixels = calloc(WIDTH*HEIGHT, sizeof(*pixels));
-	if (!pixels)
-		die(1, "failed to alloc pixel buffer");
-
-	surf = RGFW_window_createSurface(
-		win, (u8*)pixels, WIDTH, HEIGHT, RGFW_formatRGBA8
-	);
-	if (!surf)
-		die(1, "failed to create window surface");
-
-	/* font */
-	/* TODO: paths */
-	if (font_load(&font, "./Xanh.ttf", 24.0) < 0)
-		die(1, "failed to load font");
-	font.aa = true;
 	term_clear(&term, &car);
 }
 
@@ -192,6 +201,78 @@ static void ptywrite(const char* s, size_t n)
 	}
 }
 
+/** TODO
+ */
+static void resize_pty(void)
+{
+	struct winsize ws = {
+		.ws_col = term.cols,
+		.ws_row = term.rows,
+		.ws_xpixel = winw,
+		.ws_ypixel = winh,
+	};
+
+	if (term.ptyfd >= 0)
+		ioctl(term.ptyfd, TIOCSWINSZ, &ws);
+}
+
+/** TODO
+ */
+static int resize_surface(int w, int h)
+{
+	uint32_t* npixels;
+	RGFW_surface* nsurf;
+
+	if (w < 1)
+		w = 1;
+	if (h < 1)
+		h = 1;
+
+	npixels = calloc(w*h, sizeof(*npixels));
+	if (!npixels)
+		return -1;
+
+	nsurf = RGFW_window_createSurface(
+		win, (u8*)npixels, w, h, RGFW_formatRGBA8
+	);
+	if (!nsurf) {
+		free(npixels);
+		return -1;
+	}
+
+	if (surf)
+		RGFW_surface_free(surf);
+	free(pixels);
+
+	pixels = npixels;
+	surf = nsurf;
+	winw = w;
+	winh = h;
+
+	return 0;
+}
+
+/** TODO
+ */
+static void resize_terminal(int w, int h)
+{
+	int cols = w / font.cellw;
+	int rows = h / font.cellh;
+
+	if (cols < 1)
+		cols = 1;
+	if (rows < 1)
+		rows = 1;
+
+	if (cols == term.cols && rows == term.rows)
+		return;
+
+	if (term_resize(&term, &car, cols, rows) < 0)
+		die(1, "failed to resize terminal");
+
+	resize_pty();
+}
+
 /**
  * @brief program event loop (TODO)
  */
@@ -200,25 +281,33 @@ static void run(void)
 	RGFW_event ev;
 
 	while (!RGFW_window_shouldClose(win)) {
-		while (RGFW_window_checkEvent(win, &ev))
+		while (RGFW_window_checkEvent(win, &ev)) {
+			if (ev.type == RGFW_windowResized) {
+				if (resize_surface(ev.update.w, ev.update.h) < 0)
+					die(EXIT_FAILURE, "failed to resize surface");
+				resize_terminal(ev.update.w, ev.update.h);
+				continue;
+			}
+
 			handle_key(ev);
+		}
 
 		ptyread();
 
 		/* drawing */
-		draw_clear(pixels, WIDTH, HEIGHT, rgba(0, 0, 0, 255));
+		draw_clear(pixels, winw, winh, rgba(0, 0, 0, 255));
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
 				Rune* rune  = &RUNE(&term, x, y);
 
 				draw_rune(
-					pixels, WIDTH, HEIGHT, x, y,
+					pixels, winw, winh, x, y,
 					font.cellw, font.cellh, rune->bg
 				);
 
 				if (rune->cp != ' ') {
 					draw_codepoint(
-						&font, pixels, WIDTH, HEIGHT,
+						&font, pixels, winw, winh,
 						x * font.cellw,
 						y * font.cellh + (int)font.asc,
 						rune->cp, rune->fg
@@ -228,7 +317,7 @@ static void run(void)
 		}
 
 		draw_caret(
-			pixels, WIDTH, HEIGHT,
+			pixels, winw, winh,
 			car.x, car.y,
 			font.cellw, font.cellh,
 			rgba(255, 255, 255, 255)
