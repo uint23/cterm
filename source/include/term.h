@@ -7,6 +7,13 @@
 
 /* resolve 1D rune from 2D input */ 
 #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
+#define CSI_PARAMS_MAX (16)
+
+enum TState {
+	TSTATE_NORMAL,
+	TSTATE_ESC,
+	TSTATE_CSI,
+};
 
 typedef struct {
 	uint32_t       cp;  /* codepoint */
@@ -30,6 +37,10 @@ typedef struct {
 
 	int            ptyfd;
 	pid_t          ptypid;
+
+	enum TState   state;
+	int           csi_params[CSI_PARAMS_MAX];
+	int           csi_param;
 } Term;
 
 /**
