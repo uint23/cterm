@@ -1,9 +1,13 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "draw.h"
 
 static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
                   uint32_t fg);
+static Glyph* get_glyph(Fontface* f, uint32_t cp);
+
+static Glyph glyphs[GLYPH_CACHE_MAX];
 
 /**
  * @brief blend a pixel using alpha compositong
@@ -42,6 +46,52 @@ static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
 	px[3] = 255;
 }
 
+/** TODO
+ */
+static Glyph* get_glyph(Fontface* f, uint32_t cp)
+{
+	SFT_Glyph glyph;
+	SFT_GMetrics gm;
+	SFT_Image img;
+	Glyph* g;
+
+	if (cp >= GLYPH_CACHE_MAX)
+		return NULL;
+
+	g = &glyphs[cp];
+	if (g->valid)
+		return g;
+
+	if (sft_lookup(&f->sft, cp, &glyph) < 0)
+		return NULL;
+	if (sft_gmetrics(&f->sft, glyph, &gm) < 0)
+		return NULL;
+	if (gm.minWidth <= 0 || gm.minHeight <= 0)
+		return NULL;
+
+	g->bmp = calloc(gm.minWidth * gm.minHeight, 1);
+	if (!g->bmp)
+		return NULL;
+
+	img.pixels = g->bmp;
+	img.width = gm.minWidth;
+	img.height = gm.minHeight;
+
+	if (sft_render(&f->sft, glyph, img) < 0) {
+		free(g->bmp);
+		memset(g, 0, sizeof(*g));
+		return NULL;
+	}
+
+	g->w = gm.minWidth;
+	g->h = gm.minHeight;
+	g->lsb = gm.leftSideBearing;
+	g->yoff = gm.yOffset;
+	g->valid = true;
+
+	return g;
+}
+
 void draw_clear(uint32_t* dst, int w, int h, uint32_t col)
 {
 	for (int i = 0; i < w*h; i++)
@@ -78,49 +128,27 @@ void draw_caret(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
 }
 
 void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
-                         int baseline, uint32_t cp, uint32_t fg)
+                    int baseline, uint32_t cp, uint32_t fg)
 {
-	SFT_Glyph glyph;
-	SFT_GMetrics gm;
-	SFT_Image img;
-	uint8_t* bmp;
-	int bx;
-	int by;
+	Glyph* g;
 
-	/* get glyph metics */
 	if (!f || !f->font || !dst)
 		return;
-	if (sft_lookup(&f->sft, cp, &glyph) < 0)
-		return;
-	if (sft_gmetrics(&f->sft, glyph, &gm) < 0)
-		return;
-	if (gm.minWidth <= 0 || gm.minHeight <= 0)
+
+	g = get_glyph(f, cp);
+	if (!g)
 		return;
 
-	bmp = calloc(gm.minWidth*gm.minHeight, 1);
-	if (!bmp)
-		return;
+	for (int by = 0; by < g->h; by++) {
+		for (int bx = 0; bx < g->w; bx++) {
+			uint8_t a = g->bmp[(by * g->w) + bx];
+			uint8_t aa = f->aa ? a : (a > 128 ? 255 : 0);
 
-	img.pixels = bmp;
-	img.width = gm.minWidth;
-	img.height = gm.minHeight;
+			int dst_x = x + g->lsb + bx;
+			int dst_y = baseline + g->yoff + by;
 
-	if (sft_render(&f->sft, glyph, img) == 0) {
-		/* copy bmp to dst */
-		for (by = 0; by < gm.minHeight; by++) {
-			for (bx = 0; bx < gm.minWidth; bx++) {
-				/* TODO: proper aa controls */
-				uint8_t a = bmp[(by*gm.minWidth) + bx]; /* alpha */
-				uint8_t aa = f->aa ? a : (a > 128 ? 255 : 0);
-
-				/* translate bpm pixels to dst pixels */
-				int dst_x = x + (int)gm.leftSideBearing + bx;
-				int dst_y = baseline + gm.yOffset + by;
-
-				blend(dst, w, h, dst_x, dst_y, aa, fg);
-			}
+			blend(dst, w, h, dst_x, dst_y, aa, fg);
 		}
 	}
-	free(bmp);
 }
 

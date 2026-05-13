@@ -5,7 +5,16 @@
 
 #include "font.h"
 
-/* TODO: proper structs and faster drawing with damage for drawing shaepes*/
+#define GLYPH_CACHE_MAX 256
+
+typedef struct {
+	bool           valid;
+	int            w;
+	int            h;
+	int            lsb;
+	int            yoff;
+	uint8_t*       bmp;
+} Glyph;
 
 /**
  * @brief clear a buffer size wxh
