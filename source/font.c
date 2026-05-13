@@ -1,8 +1,9 @@
-#include "font.h"
-#include "schrift.h"
-
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "font.h"
+#include "schrift.h"
 
 int font_load(Fontface* f, const char* path, double size)
 {
@@ -34,15 +35,17 @@ int font_load(Fontface* f, const char* path, double size)
 	f->asc = lm.ascender;
 	f->dsc = lm.descender;
 
-	/* cell width/height */
-	f->cellh = (int)(lm.ascender - lm.descender + lm.lineGap + 0.5);
+	/* cell height */
+	f->cellh = (int)ceil(lm.ascender - lm.descender + lm.lineGap);
 
+	/* cell width */
 	if (sft_lookup(&f->sft, 'A', &glyph) < 0)
 		goto fail;
 	if (sft_gmetrics(&f->sft, glyph, &gm) < 0)
 		goto fail;
 
-	f->cellw = (int)(gm.advanceWidth + 0.5);
+	f->cellw = (int)ceil(gm.advanceWidth);
+
 	if (f->cellw <= 0 || f->cellh <= 0)
 		goto fail;
 	
