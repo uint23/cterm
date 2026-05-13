@@ -1,6 +1,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <grapheme.h>
+
 #include "term.h"
 
 void term_clear(Term* t, Caret* c)
@@ -74,6 +76,25 @@ void term_scroll(Term* t)
 		rune->fg = t->fg;
 		rune->bg = t->bg;
 		rune->dmg = true;
+	}
+}
+
+void term_write(Term* t, Caret* c, const char* s, size_t n)
+{
+	size_t off = 0;
+
+	while (off < n) {
+		uint32_t cp;
+		/* s+off: pointer to current position
+		 * n-off: remaining bytes
+		 */
+		size_t len = grapheme_decode_utf8(s+off, n-off, &cp);
+
+		if (len ==0)
+			break;
+
+		term_putc(t, c, cp);
+		off += len;
 	}
 }
 

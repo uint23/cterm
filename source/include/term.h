@@ -24,8 +24,10 @@ typedef struct {
 	Rune*          runes;
 	uint32_t       fg;
 	uint32_t       bg;
+
 	int            cols;
 	int            rows;
+
 	int            ptyfd;
 	pid_t          ptypid;
 } Term;
@@ -54,6 +56,16 @@ void term_putc(Term* t, Caret* c, uint32_t cp);
  * @param t terminal instance to scroll
  */
 void term_scroll(Term* t);
+
+/**
+ * @brief handle placing special and normal characters
+ *
+ * @param t terminal instance
+ * @param c cursor instance
+ * @param s string buffer to write
+ * @param n length of string buffer
+ */
+void term_write(Term* t, Caret* c, const char* s, size_t n);
 
 #endif /* TERM_H */
 

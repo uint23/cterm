@@ -12,7 +12,6 @@
 #include <unistd.h>
 
 #include <RGFW.h>
-#include <grapheme.h>
 #include <schrift.h>
 
 #include "draw.h"
@@ -144,7 +143,7 @@ static void init(void)
 	/* TODO: paths */
 	if (font_load(&font, "./Xanh.ttf", 24.0) < 0)
 		die(1, "failed to load font");
-	font.aa = false;
+	font.aa = true;
 	term_clear(&term, &car);
 }
 
@@ -162,8 +161,7 @@ static void ptyread(void)
 		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
 			break;
 		if (n > 0) {
-			for (ssize_t i = 0; i < n; i++)
-				term_putc(&term, &car, (unsigned char)buf[i]);
+			term_write(&term, &car, buf, n);
 			continue;
 		}
 
