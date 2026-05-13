@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 /* resolve 1D rune from 2D input */ 
 #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
@@ -26,6 +27,7 @@ typedef struct {
 	int            cols;
 	int            rows;
 	int            ptyfd;
+	pid_t          ptypid;
 } Term;
 
 /**
@@ -47,7 +49,7 @@ void term_clear(Term* t, Caret* c);
 void term_putc(Term* t, Caret* c, uint32_t cp);
 
 /**
- * @brief scroll viewport down by one
+ * @brief scroll viewport up by one
  *
  * @param t terminal instance to scroll
  */
