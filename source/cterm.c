@@ -9,7 +9,7 @@
 #include "draw.h"
 #include "font.h"
 #include "term.h"
-#include "util.h"
+#include "utils.h"
 
 #define WIDTH  800
 #define HEIGHT 600

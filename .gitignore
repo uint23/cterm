@@ -3,4 +3,6 @@ cterm
 *.o
 *.swp
 *.swo
+platform.mk
+*.ttf
 

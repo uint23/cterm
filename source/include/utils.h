@@ -1,5 +1,5 @@
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -31,5 +31,5 @@ uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
  */
 void* xmalloc(size_t len);
 
-#endif /* UTIL_H */
+#endif /* UTILS_H */
 

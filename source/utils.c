@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "util.h"
+#include "utils.h"
 
 /* TODO: stdarg */
 void die(int ec, const char* msg)
