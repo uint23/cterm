@@ -9,6 +9,8 @@
 
 static int csi_arg(Term* t, int i, int fallback);
 static void alt_screen(Term* t, Caret* c, bool on);
+static void chars_insert(Term* t, Caret* c, int n);
+static void chars_delete(Term* t, Caret* c, int n);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
 static void csi_reset(Term* t);
 static void erase_display(Term* t, Caret* c);
@@ -67,9 +69,46 @@ static void alt_screen(Term* t, Caret* c, bool on)
 
 /** TODO
  */
+static void chars_insert(Term* t, Caret* c, int n)
+{
+	int cols = t->cols - c->x;
+	Rune* line = &RUNE(t, 0, c->y);
+
+	if (n > cols)
+		n = cols;
+	memmove(&line[c->x + n], &line[c->x], sizeof(Rune) * (cols - n));
+	for (int x = c->x; x < c->x + n; x++)
+		reset_rune(t, x, c->y);
+	for (int x = c->x + n; x < t->cols; x++)
+		RUNE(t, x, c->y).dmg = true;
+}
+
+/** TODO
+ */
+static void chars_delete(Term* t, Caret* c, int n)
+{
+	int cols = t->cols - c->x;
+	Rune* line = &RUNE(t, 0, c->y);
+
+	if (n > cols)
+		n = cols;
+	memmove(&line[c->x], &line[c->x + n], sizeof(Rune) * (cols - n));
+	for (int x = t->cols - n; x < t->cols; x++)
+		reset_rune(t, x, c->y);
+	for (int x = c->x; x < t->cols - n; x++)
+		RUNE(t, x, c->y).dmg = true;
+}
+
+/** TODO
+ */
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 {
 	switch (ch) {
+	case '@': /* ICH - Insert Character */
+		t->wrapnext = false;
+		chars_insert(t, c, csi_arg(t, 0, 1));
+		break;
+
 	case 'H': /* CUP - Cursor Position - ESC[row;colH */
 	case 'f': { /* HVP - Horizontal and Vertical Postion - ESC[row;colf */
 		t->wrapnext = false;
@@ -96,6 +135,11 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 
 	case 'K': /* EL - Erase in Line - ESC[nK */
 		erase_line(t, c);
+		break;
+
+	case 'P': /* DCH - Delete Character */
+		t->wrapnext = false;
+		chars_delete(t, c, csi_arg(t, 0, 1));
 		break;
 
 	case 'X': { /* ECH - Erase Character */
