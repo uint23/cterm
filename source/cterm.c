@@ -89,15 +89,30 @@ static void handle_key(RGFW_event ev)
 
 	/* special character */
 	if (ev.type == RGFW_keyPressed) {
-		char c = ev.key.value;
-		switch(c) {
-		case RGFW_keyReturn:    ptywrite("\r", 1); break;
+		RGFW_key key = ev.key.value;
+		if ((ev.key.mod & RGFW_modControl) &&
+		    key >= RGFW_keyA && key <= RGFW_keyZ) {
+			char c = (char)(key - RGFW_keyA + 1);
+			ptywrite(&c, 1);
+			return;
+		}
 
-		case RGFW_keyDelete:
+		switch(key) {
+		case RGFW_keyReturn:
+		case RGFW_keyPadReturn: ptywrite("\r", 1); break;
 		case RGFW_keyBackSpace: ptywrite("\x7F", 1); break;
-
-		case RGFW_keyTab:       ptywrite("\t", 1); break;
+		case RGFW_keyTab:       ptywrite("\t",  1); break;
 		case RGFW_keyEscape:    ptywrite("\x1B", 1); break;
+		case RGFW_keyUp:        ptywrite("\x1B[A", 3); break;
+		case RGFW_keyDown:      ptywrite("\x1B[B", 3); break;
+		case RGFW_keyRight:     ptywrite("\x1B[C", 3); break;
+		case RGFW_keyLeft:      ptywrite("\x1B[D", 3); break;
+		case RGFW_keyHome:      ptywrite("\x1B[H", 3); break;
+		case RGFW_keyEnd:       ptywrite("\x1B[F", 3); break;
+		case RGFW_keyInsert:    ptywrite("\x1B[2~", 4); break;
+		case RGFW_keyDelete:    ptywrite("\x1B[3~", 4); break;
+		case RGFW_keyPageUp:    ptywrite("\x1B[5~", 4); break;
+		case RGFW_keyPageDown:  ptywrite("\x1B[6~", 4); break;
 		default: break;
 		}
 	}
