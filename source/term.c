@@ -198,6 +198,8 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		bool on = ch == 'h';
 		for (int i = 0; i <= t->csi_idx; i++) {
 			int p = t->csi_params[i];
+			if (p == 25)
+				t->cursor_visible = on;
 			if (p == 1048) {
 				if (on)
 					t->saved = *c;

@@ -50,6 +50,7 @@ static Term term = {
 	.ptypid = -1,
 	.fg = TERM_DEFAULT_FG,
 	.bg = TERM_DEFAULT_BG,
+	.cursor_visible = true,
 };
 
 /**
@@ -347,7 +348,8 @@ static void run(void)
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
 				Rune* r = &RUNE(&term, x, y);
-				bool cursor = x == car.x && y == car.y;
+				bool cursor = term.cursor_visible &&
+				              x == car.x && y == car.y;
 				uint32_t fg = cursor ? r->bg : r->fg;
 				uint32_t bg = cursor ? r->fg : r->bg;
 

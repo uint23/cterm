@@ -46,6 +46,7 @@ typedef struct {
 
 	enum TState    state;
 	bool           wrapnext;
+	bool           cursor_visible;
 	int            csi_params[CSI_PARAMS_MAX];
 	int            csi_idx;
 	char           utf8[4];
