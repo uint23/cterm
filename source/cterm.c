@@ -22,6 +22,16 @@
 #define START_COLS   80
 #define START_ROWS   24
 
+static void cleanup(void);
+static void handle_key(RGFW_event ev);
+static void init(void);
+static void ptyread(void);
+static void ptywrite(const char* s, size_t n);
+static void resize_pty(void);
+static int resize_surface(int w, int h);
+static void resize_terminal(int w, int h);
+static void run(void);
+
 static Fontface font;
 static Caret car;
 static RGFW_window* win = NULL;
@@ -39,16 +49,6 @@ static Term term = {
 	.fg = 0xffffffff,
 	.bg = 0xff222222,
 };
-
-static void cleanup(void);
-static void handle_key(RGFW_event ev);
-static void init(void);
-static void ptyread(void);
-static void ptywrite(const char* s, size_t n);
-static void resize_pty(void);
-static int resize_surface(int w, int h);
-static void resize_terminal(int w, int h);
-static void run(void);
 
 /**
  * @brief release resources, close window (TODO)
