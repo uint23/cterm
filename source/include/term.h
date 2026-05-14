@@ -32,21 +32,23 @@ typedef struct {
 typedef struct {
 	Rune*          runes;
 	Rune*          alt;
+	Caret          saved;
 	uint32_t       fg;
 	uint32_t       bg;
 
 	int            cols;
 	int            rows;
+	int            scroll_top;
+	int            scroll_bot;
 
 	int            ptyfd;
 	pid_t          ptypid;
 
-	enum TState   state;
-	int           csi_params[CSI_PARAMS_MAX];
-	int           csi_idx;
-	Caret         saved;
-	char          utf8[4];
-	size_t        utf8_len;
+	enum TState    state;
+	int            csi_params[CSI_PARAMS_MAX];
+	int            csi_idx;
+	char           utf8[4];
+	size_t         utf8_len;
 } Term;
 
 /**

@@ -14,6 +14,8 @@ static void csi_reset(Term* t);
 static void erase_display(Term* t, Caret* c);
 static void erase_line(Term* t, Caret* c);
 static void reset_rune(Term* t, int x, int y);
+static void scroll_down(Term* t, int top, int bot, int n);
+static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
 static void utf8_flush(Term* t, Caret* c);
 static void utf8_putc(Term* t, Caret* c, unsigned char ch);
@@ -95,6 +97,13 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		erase_line(t, c);
 		break;
 
+	case 'X': { /* ECH - Erase Character */
+		int n = csi_arg(t, 0, 1);
+		for (int x = c->x; x < c->x + n && x < t->cols; x++)
+			reset_rune(t, x, c->y);
+		break;
+	}
+
 	case 'm': /* SGR - Select Graphics Rendition - ESC[nm, colours */
 		sgr(t);
 		break;
@@ -155,6 +164,24 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 			  break;
 	}
 
+	case 'L': /* IL - Insert Line */
+		if (c->y >= t->scroll_top && c->y <= t->scroll_bot)
+			scroll_down(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
+		break;
+
+	case 'M': /* DL - Delete Line */
+		if (c->y >= t->scroll_top && c->y <= t->scroll_bot)
+			scroll_up(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
+		break;
+
+	case 'S': /* SU - Scroll Up */
+		scroll_up(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
+		break;
+
+	case 'T': /* SD - Scroll Down */
+		scroll_down(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
+		break;
+
 	case 'h': /* set mode */
 	case 'l': { /* reset mode */
 		bool on = ch == 'h';
@@ -176,8 +203,21 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		}
 		break;
 	}
-	case 'r': /* scrolling region */
+	case 'r': { /* DECSTBM - scrolling region */
+		int top = csi_arg(t, 0, 1) - 1;
+		int bot = csi_arg(t, 1, t->rows) - 1;
+		if (top < 0)
+			top = 0;
+		if (bot >= t->rows)
+			bot = t->rows - 1;
+		if (top < bot) {
+			t->scroll_top = top;
+			t->scroll_bot = bot;
+			c->x = 0;
+			c->y = 0;
+		}
 		break;
+	}
 	case 's': t->saved = *c; break; /* save cursor */
 	case 'u': *c = t->saved; break; /* restore cursor */
 
@@ -237,7 +277,11 @@ static void erase_display(Term* t, Caret* c)
  */
 static void erase_line(Term* t, Caret* c)
 {
-	for (int x = c->x; x < t->cols; x++)
+	int mode = csi_arg(t, 0, 0);
+	int from = mode == 0 ? c->x : 0;
+	int to = mode == 1 ? c->x : t->cols - 1;
+
+	for (int x = from; x <= to; x++)
 		reset_rune(t, x, c->y);
 }
 
@@ -250,6 +294,46 @@ static void reset_rune(Term* t, int x, int y)
 	r->fg = t->fg;
 	r->bg = t->bg;
 	r->dmg = true;
+}
+
+/** TODO
+ */
+static void scroll_down(Term* t, int top, int bot, int n)
+{
+	int cols = t->cols;
+	int rows = bot - top + 1;
+
+	if (n > rows)
+		n = rows;
+	memmove(
+		&RUNE(t, 0, top + n), &RUNE(t, 0, top),
+		sizeof(Rune) * cols * (rows - n)
+	);
+	for (int y = top; y < top + n; y++) {
+		for (int x = 0; x < cols; x++)
+			reset_rune(t, x, y);
+	}
+	term_damage_all(t);
+}
+
+/** TODO
+ */
+static void scroll_up(Term* t, int top, int bot, int n)
+{
+	int cols = t->cols;
+	int rows = bot - top + 1;
+
+	if (n > rows)
+		n = rows;
+	memmove(
+		&RUNE(t, 0, top), &RUNE(t, 0, top + n),
+		sizeof(Rune) * cols * (rows - n)
+	);
+	for (int y = bot - n + 1; y <= bot; y++) {
+		for (int x = 0; x < cols; x++)
+			reset_rune(t, x, y);
+	}
+	term_damage_all(t);
 }
 
 /** TODO
@@ -374,11 +458,11 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 		break;
 	case '\n':
 		c->x = 0;
-		if (++c->y >= t->rows) {
+		if (c->y == t->scroll_bot) {
 			term_scroll(t);
-			/* move to bottom */
-			c->y = t->rows - 1;
 		}
+		else if (c->y < t->rows - 1)
+			c->y++;
 		break;
 	case '\b':
 		if (c->x > 0)
@@ -465,6 +549,8 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 	t->runes = nr;
 	t->cols = cols;
 	t->rows = rows;
+	t->scroll_top = 0;
+	t->scroll_bot = rows - 1;
 
 	if (c->x >= cols)
 		c->x = cols - 1;
@@ -484,21 +570,7 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 
 void term_scroll(Term* t)
 {
-	Rune* runes = t->runes;
-	int cols = t->cols;
-	int rows = t->rows;
-
-	/* TODO: inefficient */
-	memmove(runes, runes + cols, sizeof(Rune)*cols * (rows - 1));
-	term_damage_all(t);
-
-	for (int x = 0; x < t->cols; x++) {
-		Rune* rune = &RUNE(t, x, t->rows - 1);
-		rune->cp = ' ';
-		rune->fg = t->fg;
-		rune->bg = t->bg;
-		rune->dmg = true;
-	}
+	scroll_up(t, t->scroll_top, t->scroll_bot, 1);
 }
 
 bool term_write(Term* t, Caret* c, const char* s, size_t n)
@@ -531,6 +603,22 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			}
 			else if (ch == '8') {
 				*c = t->saved;
+				t->state = TSTATE_NORMAL;
+			}
+			else if (ch == 'M') {
+				if (c->y == t->scroll_top)
+					scroll_down(t, t->scroll_top, t->scroll_bot, 1);
+				else if (c->y > 0)
+					c->y--;
+				t->state = TSTATE_NORMAL;
+			}
+			else if (ch == 'D' || ch == 'E') {
+				if (ch == 'E')
+					c->x = 0;
+				if (c->y == t->scroll_bot)
+					scroll_up(t, t->scroll_top, t->scroll_bot, 1);
+				else if (c->y < t->rows - 1)
+					c->y++;
 				t->state = TSTATE_NORMAL;
 			}
 			else {
