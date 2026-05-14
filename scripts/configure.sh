@@ -10,19 +10,23 @@ MACOS_LDFLAGS="-framework Cocoa -framework CoreVideo -framework IOKit -framework
 {
 	case "$PLATFORM" in
 		Linux)
-			echo "LDFLAGS += $LINUX_LDFLAGS"
+			echo "# Linux\n"
+			echo "LDFLAGS += $LINUX_LDFLAGS\n"
 			;;
 		FreeBSD)
-			echo "LDFLAGS += $FREEBSD_LDFLAGS"
+			echo "# FreeBSD\n"
+			echo "LDFLAGS += $FREEBSD_LDFLAGS\n"
 			;;
 		OpenBSD)
-			echo "LDFLAGS += $OPENBSD_LDFLAGS"
+			echo "# OpenBSD\n"
+			echo "LDFLAGS += $OPENBSD_LDFLAGS\n"
 			;;
 		Darwin)
-			echo "LDFLAGS += $MACOS_LDFLAGS"
+			echo "# Darwin\n"
+			echo "LDFLAGS += $MACOS_LDFLAGS\n"
 			;;
-		*) # some better default option
-			echo "Unsupported platform: $PLATFORM" >&2
+		*) # TODO: some better default option
+			echo "Unsupported platform: $PLATFORM\n" >&2
 			exit 1
 			;;
 	esac
