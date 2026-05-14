@@ -14,6 +14,8 @@ static void erase_display(Term* t, Caret* c);
 static void erase_line(Term* t, Caret* c);
 static void reset_rune(Term* t, int x, int y);
 static void sgr(Term* t);
+static void utf8_flush(Term* t, Caret* c);
+static void utf8_putc(Term* t, Caret* c, unsigned char ch);
 
 static const uint32_t ansi_colours[16] = { /* TODO */
 	0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
@@ -26,7 +28,7 @@ static const uint32_t ansi_colours[16] = { /* TODO */
  */
 static int csi_arg(Term* t, int i, int fallback)
 {
-	if (i > t->csi_param)
+	if (i > t->csi_idx)
 		return fallback;
 	if (t->csi_params[i] == 0)
 		return fallback;
@@ -148,7 +150,7 @@ static void csi_reset(Term* t)
 {
 	for (int i = 0; i < CSI_PARAMS_MAX; i++)
 		t->csi_params[i] = 0;
-	t->csi_param = 0;
+	t->csi_idx = 0;
 }
 
 /** TODO
@@ -209,7 +211,7 @@ static void reset_rune(Term* t, int x, int y)
  */
 static void sgr(Term* t)
 {
-	for (int i = 0; i <= t->csi_param; i++) {
+	for (int i = 0; i <= t->csi_idx; i++) {
 		int p = t->csi_params[i];
 
 		if (p == 0) {
@@ -229,7 +231,7 @@ static void sgr(Term* t)
 		else if (p == 49)
 			t->bg = TERM_DEFAULT_BG;
 		else if ((p == 38 || p == 48) &&
-		         i + 4 <= t->csi_param && t->csi_params[i + 1] == 2) {
+		         i + 4 <= t->csi_idx && t->csi_params[i + 1] == 2) {
 			uint32_t col = rgba(
 				t->csi_params[i + 2],
 				t->csi_params[i + 3],
@@ -241,6 +243,50 @@ static void sgr(Term* t)
 				t->bg = col;
 			i += 4;
 		}
+	}
+}
+
+/** TODO
+ */
+static void utf8_flush(Term* t, Caret* c)
+{
+	if (t->utf8_len == 0)
+		return;
+	term_putc(t, c, GRAPHEME_INVALID_CODEPOINT);
+	t->utf8_len = 0;
+}
+
+/** TODO
+ */
+static void utf8_putc(Term* t, Caret* c, unsigned char ch)
+{
+	uint_least32_t cp;
+	size_t ret;
+
+	if (ch < 0x80) {
+		utf8_flush(t, c);
+		term_putc(t, c, ch);
+		return;
+	}
+
+	if (t->utf8_len == sizeof(t->utf8))
+		utf8_flush(t, c);
+
+	t->utf8[t->utf8_len++] = (char)ch;
+	for (;;) {
+		ret = grapheme_decode_utf8(t->utf8, t->utf8_len, &cp);
+		if (ret > t->utf8_len)
+			return;
+		if (ret == 0) {
+			t->utf8_len = 0;
+			return;
+		}
+
+		term_putc(t, c, (uint32_t)cp);
+		t->utf8_len -= ret;
+		if (t->utf8_len == 0)
+			return;
+		memmove(t->utf8, t->utf8 + ret, t->utf8_len);
 	}
 }
 
@@ -410,10 +456,11 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 		switch (t->state) {
 		case TSTATE_NORMAL:
 			if (ch == '\x1B') {
+				utf8_flush(t, c);
 				t->state = TSTATE_ESC;
 			}
 			else {
-				term_putc(t, c, ch);
+				utf8_putc(t, c, ch);
 			}
 			break;
 
@@ -429,12 +476,12 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 
 		case TSTATE_CSI:
 			if (ch >= '0' && ch <= '9') {
-				t->csi_params[t->csi_param] *= 10;
-				t->csi_params[t->csi_param] += ch - '0';
+				t->csi_params[t->csi_idx] *= 10;
+				t->csi_params[t->csi_idx] += ch - '0';
 			}
 			else if (ch == ';') {
-				if (t->csi_param + 1 < CSI_PARAMS_MAX)
-					t->csi_param++;
+				if (t->csi_idx + 1 < CSI_PARAMS_MAX)
+					t->csi_idx++;
 			}
 			else if (ch == '?' || ch == '>' || ch == '=') {
 				/* private CSI marker */

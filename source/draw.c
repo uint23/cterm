@@ -55,12 +55,11 @@ static Glyph* get_glyph(Fontface* f, uint32_t cp)
 	SFT_Image img;
 	Glyph* g;
 
-	if (cp >= GLYPH_CACHE_MAX)
-		return NULL;
-
-	g = &glyphs[cp];
-	if (g->valid)
+	g = &glyphs[cp % GLYPH_CACHE_MAX];
+	if (g->valid && g->cp == cp)
 		return g;
+	free(g->bmp);
+	memset(g, 0, sizeof(*g));
 
 	if (sft_lookup(&f->sft, cp, &glyph) < 0)
 		return NULL;
@@ -87,6 +86,7 @@ static Glyph* get_glyph(Fontface* f, uint32_t cp)
 	g->h = gm.minHeight;
 	g->lsb = gm.leftSideBearing;
 	g->yoff = gm.yOffset;
+	g->cp = cp;
 	g->valid = true;
 
 	return g;

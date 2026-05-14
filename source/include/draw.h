@@ -10,6 +10,7 @@
 #define Glyph _Glyph /* Xrender defines the same */
 typedef struct {
 	bool           valid;
+	uint32_t       cp;
 	int            w;
 	int            h;
 	int            lsb;
@@ -68,7 +69,7 @@ void draw_caret(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
  * @param h buffer height
  * @param x x-position to draw at
  * @param baseline text baseline y-position
- * @param cp (unicode) codepoint to draw
+ * @param cp codepoint to draw
  * @param fg foreground colour
  */
 void draw_codepoint(Fontface* face, uint32_t* dst, int w, int h, int x,

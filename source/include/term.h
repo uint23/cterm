@@ -42,7 +42,9 @@ typedef struct {
 
 	enum TState   state;
 	int           csi_params[CSI_PARAMS_MAX];
-	int           csi_param;
+	int           csi_idx;
+	char          utf8[4];
+	size_t        utf8_len;
 } Term;
 
 /**
