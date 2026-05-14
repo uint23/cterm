@@ -23,6 +23,7 @@ typedef struct {
 	uint32_t       fg;
 	uint32_t       bg;
 	uint8_t        attr;
+	uint8_t        width;
 	bool           dmg; /* rune damaged */
 } Rune;
 

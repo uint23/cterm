@@ -1,6 +1,7 @@
 #define RGFW_IMPLEMENTATION
 #include <errno.h>
 #include <fcntl.h>
+#include <locale.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -125,6 +126,8 @@ static void handle_key(RGFW_event ev)
  */
 static void init(void)
 {
+	setlocale(LC_CTYPE, "");
+
 	/* font */
 	/* TODO: paths */
 	if (font_load(&font, "./Xanh.ttf", 24.0) < 0)

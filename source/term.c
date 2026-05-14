@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #include <grapheme.h>
 
@@ -13,9 +14,11 @@ static void chars_insert(Term* t, Caret* c, int n);
 static void chars_delete(Term* t, Caret* c, int n);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
 static void csi_reset(Term* t);
+static int cp_width(uint32_t cp);
 static void erase_display(Term* t, Caret* c);
 static void erase_line(Term* t, Caret* c);
 static void reset_rune(Term* t, int x, int y);
+static void rune_prepare(Term* t, int x, int y);
 static void scroll_down(Term* t, int top, int bot, int n);
 static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
@@ -298,6 +301,19 @@ static void csi_reset(Term* t)
 
 /** TODO
  */
+static int cp_width(uint32_t cp)
+{
+	int w = wcwidth((wchar_t)cp);
+
+	if (w < 0)
+		return 1;
+	if (w > 2)
+		return 2;
+	return w;
+}
+
+/** TODO
+ */
 static void erase_display(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
@@ -352,7 +368,18 @@ static void reset_rune(Term* t, int x, int y)
 	r->fg = t->fg;
 	r->bg = t->bg;
 	r->attr = t->attr;
+	r->width = 1;
 	r->dmg = true;
+}
+
+/** TODO
+ */
+static void rune_prepare(Term* t, int x, int y)
+{
+	if (x > 0 && RUNE(t, x, y).width == 0)
+		reset_rune(t, x - 1, y);
+	if (RUNE(t, x, y).width == 2 && x + 1 < t->cols)
+		reset_rune(t, x + 1, y);
 }
 
 /** TODO
@@ -492,6 +519,7 @@ void term_clear(Term* t, Caret* c)
 			rune->fg = t->fg;
 			rune->bg = t->bg;
 			rune->attr = t->attr;
+			rune->width = 1;
 			rune->dmg = true;
 		}
 	}
@@ -544,30 +572,52 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 		if (c->x >= t->cols)
 			term_putc(t, c, '\n');
 		break;
-	default:
+	default: {
+		int w;
+
 		if (cp < 32)
 			break;
+		w = cp_width(cp);
+		if (w == 0)
+			break;
+		if (w == 2 && t->cols < 2)
+			w = 1;
 
 		if (t->wrapnext) {
 			term_putc(t, c, '\n');
 			t->wrapnext = false;
 		}
+		if (w == 2 && c->x == t->cols - 1)
+			term_putc(t, c, '\n');
 
+		rune_prepare(t, c->x, c->y);
 		Rune* r = &RUNE(t, c->x, c->y);
 		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg ||
-		    r->attr != t->attr) {
+		    r->attr != t->attr || r->width != w) {
 			r->cp = cp;
 			r->fg = t->fg;
 			r->bg = t->bg;
 			r->attr = t->attr;
+			r->width = w;
 			r->dmg = true;
 		}
-		if (c->x == t->cols - 1)
+		if (w == 2) {
+			Rune* spacer = &RUNE(t, c->x + 1, c->y);
+			spacer->cp = ' ';
+			spacer->fg = t->fg;
+			spacer->bg = t->bg;
+			spacer->attr = t->attr;
+			spacer->width = 0;
+			spacer->dmg = true;
+		}
+
+		if (c->x + w >= t->cols)
 			t->wrapnext = true;
 		else
-			c->x++;
+			c->x += w;
 
 		break;
+	}
 	}
 }
 
@@ -602,6 +652,7 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 			r->fg = t->fg;
 			r->bg = t->bg;
 			r->attr = t->attr;
+			r->width = 1;
 			r->dmg = true;
 		}
 	}
