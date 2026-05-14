@@ -72,6 +72,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	switch (ch) {
 	case 'H': /* CUP - Cursor Position - ESC[row;colH */
 	case 'f': { /* HVP - Horizontal and Vertical Postion - ESC[row;colf */
+		t->wrapnext = false;
 		int row = csi_arg(t, 0, 1) - 1;
 		int col = csi_arg(t, 1, 1) - 1;
 
@@ -109,6 +110,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		break;
 
 	case 'A': { /* CUU - cursor up */
+		t->wrapnext = false;
 		int n = csi_arg(t, 0, 1);
 		c->y -= n;
 		if (c->y < 0)
@@ -117,6 +119,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 
 	case 'B': { /* CUD - cursor down */
+		t->wrapnext = false;
 		int n = csi_arg(t, 0, 1);
 		c->y += n;
 		if (c->y >= t->rows)
@@ -125,6 +128,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 
 	case 'C': { /* CUF - cursor forward */
+		t->wrapnext = false;
 		int n = csi_arg(t, 0, 1);
 		c->x += n;
 		if (c->x >= t->cols)
@@ -133,6 +137,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 
 	case 'D': { /* CUB - cursor back */
+			  t->wrapnext = false;
 			  int n = csi_arg(t, 0, 1);
 			  c->x -= n;
 			  if (c->x < 0)
@@ -141,6 +146,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 
 	case 'G': { /* CHA - cursor horizontal absolute */
+			  t->wrapnext = false;
 			  int col = csi_arg(t, 0, 1) - 1;
 
 			  if (col < 0)
@@ -153,6 +159,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 
 	case 'd': { /* VPA - vertical position absolute */
+			  t->wrapnext = false;
 			  int row = csi_arg(t, 0, 1) - 1;
 
 			  if (row < 0)
@@ -165,20 +172,24 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 
 	case 'L': /* IL - Insert Line */
+		t->wrapnext = false;
 		if (c->y >= t->scroll_top && c->y <= t->scroll_bot)
 			scroll_down(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
 		break;
 
 	case 'M': /* DL - Delete Line */
+		t->wrapnext = false;
 		if (c->y >= t->scroll_top && c->y <= t->scroll_bot)
 			scroll_up(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
 		break;
 
 	case 'S': /* SU - Scroll Up */
+		t->wrapnext = false;
 		scroll_up(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
 		break;
 
 	case 'T': /* SD - Scroll Down */
+		t->wrapnext = false;
 		scroll_down(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
 		break;
 
@@ -204,6 +215,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		break;
 	}
 	case 'r': { /* DECSTBM - scrolling region */
+		t->wrapnext = false;
 		int top = csi_arg(t, 0, 1) - 1;
 		int bot = csi_arg(t, 1, t->rows) - 1;
 		if (top < 0)
@@ -219,7 +231,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		break;
 	}
 	case 's': t->saved = *c; break; /* save cursor */
-	case 'u': *c = t->saved; break; /* restore cursor */
+	case 'u': t->wrapnext = false; *c = t->saved; break; /* restore cursor */
 
 	default: /* Unsupported CSI */
 		break;
@@ -433,6 +445,7 @@ void term_clear(Term* t, Caret* c)
 
 	c->x = 0;
 	c->y = 0;
+	t->wrapnext = false;
 }
 
 void term_damage_all(Term* t)
@@ -455,9 +468,11 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 	switch (cp) {
 	case '\r':
 		c->x = 0;
+		t->wrapnext = false;
 		break;
 	case '\n':
 		c->x = 0;
+		t->wrapnext = false;
 		if (c->y == t->scroll_bot) {
 			term_scroll(t);
 		}
@@ -465,10 +480,12 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 			c->y++;
 		break;
 	case '\b':
+		t->wrapnext = false;
 		if (c->x > 0)
 			c->x--;
 		break;
 	case '\t':
+		t->wrapnext = false;
 		/* move cursor to next tabstop */
 		c->x = (c->x+8) & ~0x7;
 		if (c->x >= t->cols)
@@ -478,6 +495,11 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 		if (cp < 32)
 			break;
 
+		if (t->wrapnext) {
+			term_putc(t, c, '\n');
+			t->wrapnext = false;
+		}
+
 		Rune* r = &RUNE(t, c->x, c->y);
 		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg) {
 			r->cp = cp;
@@ -485,9 +507,10 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 			r->bg = t->bg;
 			r->dmg = true;
 		}
-		c->x++;
-		if (c->x >= t->cols)
-			term_putc(t, c, '\n');
+		if (c->x == t->cols - 1)
+			t->wrapnext = true;
+		else
+			c->x++;
 
 		break;
 	}
@@ -560,6 +583,7 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 		c->x = 0;
 	if (c->y < 0)
 		c->y = 0;
+	t->wrapnext = false;
 	if (t->saved.x >= cols)
 		t->saved.x = cols - 1;
 	if (t->saved.y >= rows)
@@ -606,6 +630,7 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				t->state = TSTATE_NORMAL;
 			}
 			else if (ch == 'M') {
+				t->wrapnext = false;
 				if (c->y == t->scroll_top)
 					scroll_down(t, t->scroll_top, t->scroll_bot, 1);
 				else if (c->y > 0)
@@ -613,6 +638,7 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				t->state = TSTATE_NORMAL;
 			}
 			else if (ch == 'D' || ch == 'E') {
+				t->wrapnext = false;
 				if (ch == 'E')
 					c->x = 0;
 				if (c->y == t->scroll_bot)

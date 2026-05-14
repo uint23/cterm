@@ -45,6 +45,7 @@ typedef struct {
 	pid_t          ptypid;
 
 	enum TState    state;
+	bool           wrapnext;
 	int            csi_params[CSI_PARAMS_MAX];
 	int            csi_idx;
 	char           utf8[4];
