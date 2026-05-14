@@ -351,6 +351,7 @@ static void reset_rune(Term* t, int x, int y)
 	r->cp = ' ';
 	r->fg = t->fg;
 	r->bg = t->bg;
+	r->attr = t->attr;
 	r->dmg = true;
 }
 
@@ -404,7 +405,12 @@ static void sgr(Term* t)
 		if (p == 0) {
 			t->fg = TERM_DEFAULT_FG;
 			t->bg = TERM_DEFAULT_BG;
+			t->attr = 0;
 		}
+		else if (p == 7)
+			t->attr |= TERM_ATTR_REVERSE;
+		else if (p == 27)
+			t->attr &= ~TERM_ATTR_REVERSE; /* turn off reverse attribute bit */
 		else if (p >= 30 && p <= 37)
 			t->fg = ansi_colours[p - 30];
 		else if (p >= 40 && p <= 47)
@@ -485,6 +491,7 @@ void term_clear(Term* t, Caret* c)
 			rune->cp = ' ';
 			rune->fg = t->fg;
 			rune->bg = t->bg;
+			rune->attr = t->attr;
 			rune->dmg = true;
 		}
 	}
@@ -547,10 +554,12 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 		}
 
 		Rune* r = &RUNE(t, c->x, c->y);
-		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg) {
+		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg ||
+		    r->attr != t->attr) {
 			r->cp = cp;
 			r->fg = t->fg;
 			r->bg = t->bg;
+			r->attr = t->attr;
 			r->dmg = true;
 		}
 		if (c->x == t->cols - 1)
@@ -592,6 +601,7 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 			r->cp = ' ';
 			r->fg = t->fg;
 			r->bg = t->bg;
+			r->attr = t->attr;
 			r->dmg = true;
 		}
 	}

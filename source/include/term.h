@@ -10,6 +10,7 @@
 #define CSI_PARAMS_MAX (16)
 #define TERM_DEFAULT_FG 0xffffffffu
 #define TERM_DEFAULT_BG 0xff222222u
+#define TERM_ATTR_REVERSE (1 << 0)
 
 enum TState {
 	TSTATE_NORMAL,
@@ -21,6 +22,7 @@ typedef struct {
 	uint32_t       cp;  /* codepoint */
 	uint32_t       fg;
 	uint32_t       bg;
+	uint8_t        attr;
 	bool           dmg; /* rune damaged */
 } Rune;
 
@@ -35,6 +37,7 @@ typedef struct {
 	Caret          saved;
 	uint32_t       fg;
 	uint32_t       bg;
+	uint8_t        attr;
 
 	int            cols;
 	int            rows;

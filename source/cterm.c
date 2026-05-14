@@ -350,8 +350,9 @@ static void run(void)
 				Rune* r = &RUNE(&term, x, y);
 				bool cursor = term.cursor_visible &&
 				              x == car.x && y == car.y;
-				uint32_t fg = cursor ? r->bg : r->fg;
-				uint32_t bg = cursor ? r->fg : r->bg;
+				bool reverse = (r->attr & TERM_ATTR_REVERSE) != 0;
+				uint32_t fg = (cursor != reverse) ? r->bg : r->fg;
+				uint32_t bg = (cursor != reverse) ? r->fg : r->bg;
 
 				if (!r->dmg)
 					continue;
