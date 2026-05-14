@@ -212,6 +212,21 @@ void term_clear(Term* t, Caret* c)
 	c->y = 0;
 }
 
+void term_damage_all(Term* t)
+{
+	for (int y = 0; y < t->rows; y++) {
+		for (int x = 0; x < t->cols; x++)
+			RUNE(t, x, y).dmg = true;
+	}
+}
+
+void term_damage_rune(Term* t, int x, int y)
+{
+	if (x < 0 || y < 0 || x >= t->cols || y >= t->rows)
+		return;
+	RUNE(t, x, y).dmg = true;
+}
+
 void term_putc(Term* t, Caret* c, uint32_t cp)
 {
 	switch (cp) {
@@ -240,10 +255,13 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 		if (cp < 32)
 			break;
 
-		RUNE(t, c->x, c->y).cp = cp;
-		RUNE(t, c->x, c->y).fg = t->fg;
-		RUNE(t, c->x, c->y).bg = t->bg;
-		RUNE(t, c->x, c->y).dmg = true;
+		Rune* r = &RUNE(t, c->x, c->y);
+		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg) {
+			r->cp = cp;
+			r->fg = t->fg;
+			r->bg = t->bg;
+			r->dmg = true;
+		}
 		c->x++;
 		if (c->x >= t->cols)
 			term_putc(t, c, '\n');
@@ -291,6 +309,11 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 		}
 	}
 
+	for (int y = 0; y < rows; y++) {
+		for (int x = 0; x < cols; x++)
+			nr[y * cols + x].dmg = true;
+	}
+
 	free(or);
 
 	t->runes = nr;
@@ -317,6 +340,7 @@ void term_scroll(Term* t)
 
 	/* TODO: inefficient */
 	memmove(runes, runes + cols, sizeof(Rune)*cols * (rows - 1));
+	term_damage_all(t);
 
 	for (int x = 0; x < t->cols; x++) {
 		Rune* rune = &RUNE(t, x, t->rows - 1);
@@ -327,10 +351,13 @@ void term_scroll(Term* t)
 	}
 }
 
-void term_write(Term* t, Caret* c, const char* s, size_t n)
+bool term_write(Term* t, Caret* c, const char* s, size_t n)
 {
+	bool damaged = false;
+
 	for (size_t i = 0; i < n; i++) {
 		unsigned char ch = (unsigned char)s[i];
+		Caret old = *c;
 
 		switch (t->state) {
 		case TSTATE_NORMAL:
@@ -370,6 +397,18 @@ void term_write(Term* t, Caret* c, const char* s, size_t n)
 			}
 			break;
 		}
+
+		if (old.x != c->x || old.y != c->y)
+			damaged = true;
 	}
+
+	for (int y = 0; y < t->rows; y++) {
+		for (int x = 0; x < t->cols; x++) {
+			if (RUNE(t, x, y).dmg)
+				return true;
+		}
+	}
+
+	return damaged;
 }
 

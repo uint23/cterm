@@ -1,9 +1,11 @@
 #define RGFW_IMPLEMENTATION
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
+#include <time.h>
 #ifdef __linux__
 #include <pty.h>
 #else
@@ -25,7 +27,7 @@
 static void cleanup(void);
 static void handle_key(RGFW_event ev);
 static void init(void);
-static void ptyread(void);
+static bool ptyread(void);
 static void ptywrite(const char* s, size_t n);
 static void resize_pty(void);
 static int resize_surface(int w, int h);
@@ -159,9 +161,10 @@ static void init(void)
 /**
  * @brief read data from master pty
  */
-static void ptyread(void)
+static bool ptyread(void)
 {
 	char buf[4096];
+	bool damaged = false;
 
 	for (;;) {
 		ssize_t n = read(term.ptyfd, buf, sizeof(buf));
@@ -170,13 +173,16 @@ static void ptyread(void)
 		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
 			break;
 		if (n > 0) {
-			term_write(&term, &car, buf, n);
+			if (term_write(&term, &car, buf, n))
+				damaged = true;
 			continue;
 		}
 
 		/* EOF or other error */
 		break;
 	}
+
+	return damaged;
 }
 
 /**
@@ -279,6 +285,9 @@ static void resize_terminal(int w, int h)
 static void run(void)
 {
 	RGFW_event ev;
+	Caret ocar = { -1, -1 };
+	bool dirty = true;
+	bool redraw_all = true;
 
 	while (!RGFW_window_shouldClose(win)) {
 		while (RGFW_window_checkEvent(win, &ev)) {
@@ -286,33 +295,61 @@ static void run(void)
 				if (resize_surface(ev.update.w, ev.update.h) < 0)
 					die(EXIT_FAILURE, "failed to resize surface");
 				resize_terminal(ev.update.w, ev.update.h);
+				term_damage_all(&term);
+				dirty = true;
+				continue;
+			}
+
+			if (ev.type == RGFW_windowRefresh ||
+			    ev.type == RGFW_windowFocusIn ||
+			    ev.type == RGFW_windowRestored) {
+				term_damage_all(&term);
+				dirty = true;
+				redraw_all = true;
 				continue;
 			}
 
 			handle_key(ev);
 		}
 
-		ptyread();
+		if (ptyread())
+			dirty = true;
 
-		/* drawing */
-		draw_clear(pixels, winw, winh, rgba(0, 0, 0, 255));
+		if (ocar.x != car.x || ocar.y != car.y) {
+			term_damage_rune(&term, ocar.x, ocar.y);
+			term_damage_rune(&term, car.x, car.y);
+			dirty = true;
+		}
+
+		if (!dirty)
+			continue;
+
+		if (redraw_all)
+			draw_clear(pixels, winw, winh, rgba(0, 0, 0, 255));
+
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
-				Rune* rune  = &RUNE(&term, x, y);
+				Rune* r = &RUNE(&term, x, y);
+
+				if (!r->dmg)
+					continue;
 
 				draw_rune(
 					pixels, winw, winh, x, y,
-					font.cellw, font.cellh, rune->bg
+					font.cellw, font.cellh, r->bg
 				);
 
-				if (rune->cp != ' ') {
+				if (r->cp != ' ') {
 					draw_codepoint(
 						&font, pixels, winw, winh,
 						x * font.cellw,
 						y * font.cellh + (int)font.asc,
-						rune->cp, rune->fg
+						r->cp,
+						r->fg
 					);
 				}
+
+				r->dmg = false;
 			}
 		}
 
@@ -324,6 +361,10 @@ static void run(void)
 		);
 
 		RGFW_window_blitSurface(win, surf);
+
+		ocar = car;
+		dirty = false;
+		redraw_all = false;
 	}
 }
 

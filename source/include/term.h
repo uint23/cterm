@@ -53,6 +53,15 @@ typedef struct {
 void term_clear(Term* t, Caret* c);
 
 /**
+ * @brief damage all the runes on terminal
+ */
+void term_damage_all(Term* t);
+
+/** @brief damage a single cell on terminal
+ */
+void term_damage_rune(Term* t, int x, int y);
+
+/**
  * @brief handle placing special and normal characters
  *
  * @param t terminal instance
@@ -79,8 +88,10 @@ void term_scroll(Term* t);
  * @param c cursor instance
  * @param s string buffer to write
  * @param n length of string buffer
+ * 
+ * @return whether it has been damaged
  */
-void term_write(Term* t, Caret* c, const char* s, size_t n);
+bool term_write(Term* t, Caret* c, const char* s, size_t n);
 
 #endif /* TERM_H */
 
