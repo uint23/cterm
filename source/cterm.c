@@ -340,19 +340,23 @@ static void run(void)
 		if (!dirty)
 			continue;
 
-		if (redraw_all)
+		if (redraw_all) {
 			draw_clear(pixels, winw, winh, rgba(0, 0, 0, 255));
+		}
 
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
 				Rune* r = &RUNE(&term, x, y);
+				bool cursor = x == car.x && y == car.y;
+				uint32_t fg = cursor ? r->bg : r->fg;
+				uint32_t bg = cursor ? r->fg : r->bg;
 
 				if (!r->dmg)
 					continue;
 
 				draw_rune(
 					pixels, winw, winh, x, y,
-					font.cellw, font.cellh, r->bg
+					font.cellw, font.cellh, bg
 				);
 
 				if (r->cp != ' ') {
@@ -361,20 +365,13 @@ static void run(void)
 						x * font.cellw,
 						y * font.cellh + (int)font.asc,
 						r->cp,
-						r->fg
+						fg
 					);
 				}
 
 				r->dmg = false;
 			}
 		}
-
-		draw_caret(
-			pixels, winw, winh,
-			car.x, car.y,
-			font.cellw, font.cellh,
-			rgba(255, 255, 255, 255)
-		);
 
 		RGFW_window_blitSurface(win, surf);
 

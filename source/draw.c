@@ -121,12 +121,6 @@ void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
 	}
 }
 
-void draw_caret(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
-                 uint32_t fg)
-{
-	draw_rune(dst, w, h, cl, rw, cw, ch, fg);
-}
-
 void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
                     int baseline, uint32_t cp, uint32_t fg)
 {
