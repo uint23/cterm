@@ -8,6 +8,8 @@
 /* resolve 1D rune from 2D input */ 
 #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
 #define CSI_PARAMS_MAX (16)
+#define TERM_DEFAULT_FG 0xffffffffu
+#define TERM_DEFAULT_BG 0xff222222u
 
 enum TState {
 	TSTATE_NORMAL,

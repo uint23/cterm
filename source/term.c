@@ -5,6 +5,7 @@
 #include <grapheme.h>
 
 #include "term.h"
+#include "utils.h"
 
 static int csi_arg(Term* t, int i, int fallback);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
@@ -12,6 +13,14 @@ static void csi_reset(Term* t);
 static void erase_display(Term* t, Caret* c);
 static void erase_line(Term* t, Caret* c);
 static void reset_rune(Term* t, int x, int y);
+static void sgr(Term* t);
+
+static const uint32_t ansi_colours[16] = { /* TODO */
+	0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
+	0xffee0000, 0xffcd00cd, 0xffcdcd00, 0xffe5e5e5,
+	0xff7f7f7f, 0xff0000ff, 0xff00ff00, 0xff00ffff,
+	0xffff5c5c, 0xffff00ff, 0xffffff00, 0xffffffff,
+};
 
 /** TODO
  */
@@ -58,7 +67,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		break;
 
 	case 'm': /* SGR - Select Graphics Rendition - ESC[nm, colours */
-		/* TODO: colours */
+		sgr(t);
 		break;
 
 	case 'A': { /* CUU - cursor up */
@@ -194,6 +203,45 @@ static void reset_rune(Term* t, int x, int y)
 	r->fg = t->fg;
 	r->bg = t->bg;
 	r->dmg = true;
+}
+
+/** TODO
+ */
+static void sgr(Term* t)
+{
+	for (int i = 0; i <= t->csi_param; i++) {
+		int p = t->csi_params[i];
+
+		if (p == 0) {
+			t->fg = TERM_DEFAULT_FG;
+			t->bg = TERM_DEFAULT_BG;
+		}
+		else if (p >= 30 && p <= 37)
+			t->fg = ansi_colours[p - 30];
+		else if (p >= 40 && p <= 47)
+			t->bg = ansi_colours[p - 40];
+		else if (p >= 90 && p <= 97)
+			t->fg = ansi_colours[p - 90 + 8];
+		else if (p >= 100 && p <= 107)
+			t->bg = ansi_colours[p - 100 + 8];
+		else if (p == 39)
+			t->fg = TERM_DEFAULT_FG;
+		else if (p == 49)
+			t->bg = TERM_DEFAULT_BG;
+		else if ((p == 38 || p == 48) &&
+		         i + 4 <= t->csi_param && t->csi_params[i + 1] == 2) {
+			uint32_t col = rgba(
+				t->csi_params[i + 2],
+				t->csi_params[i + 3],
+				t->csi_params[i + 4], 255
+			);
+			if (p == 38)
+				t->fg = col;
+			else
+				t->bg = col;
+			i += 4;
+		}
+	}
 }
 
 void term_clear(Term* t, Caret* c)

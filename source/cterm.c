@@ -48,8 +48,8 @@ static Term term = {
 	.rows = 0,
 	.ptyfd = -1,
 	.ptypid = -1,
-	.fg = 0xffffffff,
-	.bg = 0xff222222,
+	.fg = TERM_DEFAULT_FG,
+	.bg = TERM_DEFAULT_BG,
 };
 
 /**
