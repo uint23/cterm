@@ -7,6 +7,7 @@
 
 #define GLYPH_CACHE_MAX 256
 
+#define Glyph _Glyph /* Xrender defines the same */
 typedef struct {
 	bool           valid;
 	int            w;
