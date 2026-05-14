@@ -8,6 +8,7 @@
 #include "utils.h"
 
 static int csi_arg(Term* t, int i, int fallback);
+static void alt_screen(Term* t, Caret* c, bool on);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
 static void csi_reset(Term* t);
 static void erase_display(Term* t, Caret* c);
@@ -34,6 +35,32 @@ static int csi_arg(Term* t, int i, int fallback)
 		return fallback;
 
 	return t->csi_params[i];
+}
+
+/** TODO
+ */
+static void alt_screen(Term* t, Caret* c, bool on)
+{
+	Rune* tmp;
+
+	if (on) {
+		if (t->alt)
+			return;
+		tmp = calloc(t->cols*t->rows, sizeof(*tmp));
+		if (!tmp)
+			return;
+		t->alt = t->runes;
+		t->runes = tmp;
+		term_clear(t, c);
+		return;
+	}
+
+	if (!t->alt)
+		return;
+	free(t->runes);
+	t->runes = t->alt;
+	t->alt = NULL;
+	term_damage_all(t);
 }
 
 /** TODO
@@ -128,13 +155,31 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 			  break;
 	}
 
-	/* TODO? unsupported */
 	case 'h': /* set mode */
-	case 'l': /* reset mode */
-	case 'r': /* scrolling region */
-	case 's': /* save cursor */
-	case 'u': /* restore cursor */
+	case 'l': { /* reset mode */
+		bool on = ch == 'h';
+		for (int i = 0; i <= t->csi_idx; i++) {
+			int p = t->csi_params[i];
+			if (p == 1048) {
+				if (on)
+					t->saved = *c;
+				else
+					*c = t->saved;
+			}
+			if (p == 47 || p == 1047 || p == 1049) {
+				if (on && p == 1049)
+					t->saved = *c;
+				alt_screen(t, c, on);
+				if (!on && p == 1049)
+					*c = t->saved;
+			}
+		}
 		break;
+	}
+	case 'r': /* scrolling region */
+		break;
+	case 's': t->saved = *c; break; /* save cursor */
+	case 'u': *c = t->saved; break; /* restore cursor */
 
 	default: /* Unsupported CSI */
 		break;
@@ -371,6 +416,13 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 	int ocols = t->cols;
 	int orows = t->rows;
 
+	if (t->alt) {
+		free(t->runes);
+		t->runes = t->alt;
+		t->alt = NULL;
+		or = t->runes;
+	}
+
 	if (cols < 1)
 		cols = 1;
 	if (rows < 1)
@@ -422,6 +474,10 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 		c->x = 0;
 	if (c->y < 0)
 		c->y = 0;
+	if (t->saved.x >= cols)
+		t->saved.x = cols - 1;
+	if (t->saved.y >= rows)
+		t->saved.y = rows - 1;
 
 	return 0;
 }
@@ -468,6 +524,14 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			if (ch == '[') {
 				csi_reset(t);
 				t->state = TSTATE_CSI;
+			}
+			else if (ch == '7') {
+				t->saved = *c;
+				t->state = TSTATE_NORMAL;
+			}
+			else if (ch == '8') {
+				*c = t->saved;
+				t->state = TSTATE_NORMAL;
 			}
 			else {
 				t->state = TSTATE_NORMAL;

@@ -58,6 +58,7 @@ static Term term = {
 static void cleanup(void)
 {
 	free(term.runes);
+	free(term.alt);
 	font_free(&font);
 
 	if (surf)

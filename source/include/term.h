@@ -31,6 +31,7 @@ typedef struct {
 
 typedef struct {
 	Rune*          runes;
+	Rune*          alt;
 	uint32_t       fg;
 	uint32_t       bg;
 
@@ -43,6 +44,7 @@ typedef struct {
 	enum TState   state;
 	int           csi_params[CSI_PARAMS_MAX];
 	int           csi_idx;
+	Caret         saved;
 	char          utf8[4];
 	size_t        utf8_len;
 } Term;
