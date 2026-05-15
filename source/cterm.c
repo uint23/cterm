@@ -166,7 +166,7 @@ static void init(void)
 		die(EXIT_FAILURE, "failed to fork pty");
 	if (term.ptypid == 0) {
 		/* TODO: change later */
-		setenv("TERM", "xterm-256color", 1);
+		setenv("TERM", "vt100", 1);
 		execlp("/bin/sh", "sh", "-i", NULL);
 		_exit(127);
 	}
