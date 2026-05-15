@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@ static void resize_pty(void);
 static int resize_surface(int w, int h);
 static void resize_terminal(int w, int h);
 static void run(void);
+static void wait(void);
 
 static Fontface font;
 static Caret car;
@@ -341,8 +343,10 @@ static void run(void)
 			dirty = true;
 		}
 
-		if (!dirty)
+		if (!dirty) {
+			wait();
 			continue;
+		}
 
 		if (redraw_all) {
 			draw_clear(pixels, winw, winh, rgba(0, 0, 0, 255));
@@ -384,6 +388,29 @@ static void run(void)
 		ocar = car;
 		dirty = false;
 		redraw_all = false;
+	}
+}
+
+/**
+ * @brief wait for activity while allowing window events
+ */
+static void wait(void)
+{
+	struct pollfd pfd = {
+		.fd = term.ptyfd,
+		.events = POLLIN,
+	};
+
+	if (term.ptyfd < 0) {
+		RGFW_waitForEvent(16);
+		return;
+	}
+
+	for (;;) {
+		int ret = poll(&pfd, 1, 16);
+		if (ret < 0 && errno == EINTR)
+			continue;
+		break;
 	}
 }
 
