@@ -1,7 +1,6 @@
 CC = cc
 CFLAGS = -std=c99 -Wall -Wextra
-CPPFLAGS = -Isource/external -Isource/include \
-	   -D_POSIX_C_SOURCE=200112L
+CPPFLAGS = -Isource/external -Isource/include
 
 LDFLAGS = -lschrift -lgrapheme -lm
 
