@@ -18,6 +18,8 @@ enum TState {
 	TSTATE_CSI,
 	TSTATE_OSC,
 	TSTATE_OSC_ESC,
+	TSTATE_CHARSET,
+	TSTATE_CHARSET_SKIP,
 };
 
 typedef struct {
@@ -51,6 +53,9 @@ typedef struct {
 	pid_t          ptypid;
 
 	enum TState    state;
+	bool           acs[2];
+	int            charset;
+	int            charset_target;
 	bool           wrapnext;
 	bool           cursor_visible;
 	int            csi_params[CSI_PARAMS_MAX];

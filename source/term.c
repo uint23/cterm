@@ -12,6 +12,7 @@ static int csi_arg(Term* t, int i, int fallback);
 static void alt_screen(Term* t, Caret* c, bool on);
 static void chars_insert(Term* t, Caret* c, int n);
 static void chars_delete(Term* t, Caret* c, int n);
+static uint32_t acs_map(unsigned char ch);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
 static void csi_reset(Term* t);
 static int cp_width(uint32_t cp);
@@ -31,6 +32,25 @@ static const uint32_t ansi_colours[16] = { /* TODO */
 	0xff7f7f7f, 0xff0000ff, 0xff00ff00, 0xff00ffff,
 	0xffff5c5c, 0xffff00ff, 0xffffff00, 0xffffffff,
 };
+
+/** TODO
+ */
+static uint32_t acs_map(unsigned char ch)
+{
+	switch (ch) {
+	case '`': return 0x25c6; /* ◆ */ case 'a': return 0x2592; /* ▒ */
+	case 'f': return 0x00b0; /* ° */ case 'g': return 0x00b1; /* ± */
+	case 'j': return 0x2518; /* ┘ */ case 'k': return 0x2510; /* ┐ */
+	case 'l': return 0x250c; /* ┌ */ case 'm': return 0x2514; /* └ */
+	case 'n': return 0x253c; /* ┼ */ case 'q': return 0x2500; /* ─ */
+	case 't': return 0x251c; /* ├ */ case 'u': return 0x2524; /* ┤ */
+	case 'v': return 0x2534; /* ┴ */ case 'w': return 0x252c; /* ┬ */
+	case 'x': return 0x2502; /* │ */ case 'y': return 0x2264; /* ≤ */
+	case 'z': return 0x2265; /* ≥ */ case '{': return 0x03c0; /* π */
+	case '|': return 0x2260; /* ≠ */ case '}': return 0x00a3; /* £ */
+	case '~': return 0x00b7; /* · */ default:  return ch;
+	}
+}
 
 /** TODO
  */
@@ -485,7 +505,7 @@ static void utf8_putc(Term* t, Caret* c, unsigned char ch)
 
 	if (ch < 0x80) {
 		utf8_flush(t, c);
-		term_putc(t, c, ch);
+		term_putc(t, c, t->acs[t->charset] ? acs_map(ch) : ch);
 		return;
 	}
 
@@ -718,6 +738,12 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				utf8_flush(t, c);
 				t->state = TSTATE_ESC;
 			}
+			else if (ch == '\x0E') {
+				t->charset = 1;
+			}
+			else if (ch == '\x0F') {
+				t->charset = 0;
+			}
 			else {
 				utf8_putc(t, c, ch);
 			}
@@ -730,6 +756,17 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			}
 			else if (ch == ']') {
 				t->state = TSTATE_OSC;
+			}
+			else if (ch == '(') {
+				t->charset_target = 0;
+				t->state = TSTATE_CHARSET;
+			}
+			else if (ch == ')') {
+				t->charset_target = 1;
+				t->state = TSTATE_CHARSET;
+			}
+			else if (ch == '*' || ch == '+') {
+				t->state = TSTATE_CHARSET_SKIP;
 			}
 			else if (ch == '7') {
 				t->saved = *c;
@@ -789,6 +826,15 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 
 		case TSTATE_OSC_ESC:
 			t->state = ch == '\\' ? TSTATE_NORMAL : TSTATE_OSC;
+			break;
+
+		case TSTATE_CHARSET:
+			t->acs[t->charset_target] = ch == '0';
+			t->state = TSTATE_NORMAL;
+			break;
+
+		case TSTATE_CHARSET_SKIP:
+			t->state = TSTATE_NORMAL;
 			break;
 		}
 
