@@ -728,6 +728,9 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				csi_reset(t);
 				t->state = TSTATE_CSI;
 			}
+			else if (ch == ']') {
+				t->state = TSTATE_OSC;
+			}
 			else if (ch == '7') {
 				t->saved = *c;
 				t->state = TSTATE_NORMAL;
@@ -775,6 +778,17 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				csi_dispatch(t, c, ch);
 				t->state = TSTATE_NORMAL;
 			}
+			break;
+
+		case TSTATE_OSC:
+			if (ch == '\a')
+				t->state = TSTATE_NORMAL;
+			else if (ch == '\x1B')
+				t->state = TSTATE_OSC_ESC;
+			break;
+
+		case TSTATE_OSC_ESC:
+			t->state = ch == '\\' ? TSTATE_NORMAL : TSTATE_OSC;
 			break;
 		}
 

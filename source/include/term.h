@@ -16,6 +16,8 @@ enum TState {
 	TSTATE_NORMAL,
 	TSTATE_ESC,
 	TSTATE_CSI,
+	TSTATE_OSC,
+	TSTATE_OSC_ESC,
 };
 
 typedef struct {
