@@ -1,3 +1,4 @@
+#include <sys/wait.h>
 #define RGFW_IMPLEMENTATION
 #include <errno.h>
 #include <fcntl.h>
@@ -35,7 +36,7 @@ static void resize_pty(void);
 static int resize_surface(int w, int h);
 static void resize_terminal(int w, int h);
 static void run(void);
-static void wait(void);
+static void wait_events(void);
 
 static Fontface font;
 static Caret car;
@@ -344,7 +345,7 @@ static void run(void)
 		}
 
 		if (!dirty) {
-			wait();
+			wait_events();
 			continue;
 		}
 
@@ -394,7 +395,7 @@ static void run(void)
 /**
  * @brief wait for activity while allowing window events
  */
-static void wait(void)
+static void wait_events(void)
 {
 	struct pollfd pfd = {
 		.fd = term.ptyfd,
