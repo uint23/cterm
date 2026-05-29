@@ -81,25 +81,33 @@ static void cleanup(void)
  */
 static void handle_key(RGFW_event ev)
 {
+	int skip_keypress = 0;
+
 	/* regular character-
-	 * dont have to handle e.g. shift cases:
-	 * SHIFT+1 or `!`
+	   dont have to handle e.g. shift cases:
+	   SHIFT+1 or `!`
 	 */
 	if (ev.type == RGFW_keyChar) {
 		uint32_t cp = ev.keyChar.value;
-		if (cp >= ' ' && cp <= '~') {
+
+		skip_keypress = 1; /* key handled */
+
+		if (cp <= 0x7F) {
 			char cpch = (char)cp;
 			ptywrite(&cpch, 1);
+			return;
 		}
+
+		/* TODO? encode non ascii->UTF-8 */
+		return;
 	}
 
 	/* special character */
 	if (ev.type == RGFW_keyPressed) {
 		RGFW_key key = ev.key.value;
-		if ((ev.key.mod & RGFW_modControl) &&
-		    key >= RGFW_keyA && key <= RGFW_keyZ) {
-			char c = (char)(key - RGFW_keyA + 1);
-			ptywrite(&c, 1);
+
+		if (skip_keypress) {
+			skip_keypress = 0;
 			return;
 		}
 
