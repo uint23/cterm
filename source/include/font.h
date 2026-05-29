@@ -18,7 +18,10 @@ typedef struct {
 	int           adv; /* advance */
 	int           w;
 	int           h;
+	int           xoff;
+	int           yoff;
 } BdfFont;
+typedef BdfFont BdfGlyph;
 
 typedef struct {
 	FontKind      kind;
