@@ -5,9 +5,29 @@
 
 #include <schrift.h>
 
+#define BDF_GLYPHS_MAX (65536)
+
+typedef enum {
+	FONT_BDF,
+	FONT_SFT,
+} FontKind;
+
 typedef struct {
+	bool          valid;
+	uint8_t*      bmp;
+	int           adv; /* advance */
+	int           w;
+	int           h;
+} BdfFont;
+
+typedef struct {
+	FontKind      kind;
+
 	SFT_Font*     font;
 	SFT           sft;
+
+	BdfFont*      bdf;
+
 	double        size;
 	double        asc;   /* ascent */
 	double        dsc;   /* descent */
