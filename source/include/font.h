@@ -46,7 +46,7 @@ typedef struct {
  * @param path font path
  * @param size size of font
  *
- * @return 1=success, -1=failed
+ * @return 0=success, -1=failed
  */
 int font_load(Fontface* f, const char* path, double size);
 
