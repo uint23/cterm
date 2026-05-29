@@ -296,8 +296,12 @@ int font_load(Fontface* f, const char* path, double size)
 	if (t < 0)
 		return -1;
 
-	if (t == FONT_BDF)
+	if (t == FONT_BDF) {
+		f->bdf = calloc(BDF_GLYPHS_MAX, sizeof(*f->bdf));
+		if (!f->bdf)
+			return -1;
 		return load_bdf(f, path);
+	}
 
 	if (size <= 0)
 		return -1;
@@ -316,6 +320,7 @@ void font_free(Fontface* f)
 	if (f->kind == FONT_BDF) {
 		for (int i = 0; i < BDF_GLYPHS_MAX; i++)
 			free(f->bdf[i].bmp);
+		free(f->bdf);
 	}
 
 	memset(f, 0, sizeof(*f));
