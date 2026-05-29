@@ -3,11 +3,28 @@
 
 #include "draw.h"
 
+static void draw_bitmap(uint32_t* dst, int w, int h, uint8_t* bmp,
+		int bw, int bh, int x, int y, int aa, uint32_t fg);
 static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
                   uint32_t fg);
 static Glyph* get_glyph(Fontface* f, uint32_t cp);
 
 static Glyph glyphs[GLYPH_CACHE_MAX];
+
+static void draw_bitmap(uint32_t* dst, int w, int h, uint8_t* bmp,
+		int bw, int bh, int x, int y, int aa, uint32_t fg)
+{
+	for (int by = 0; by < bh; by++) {
+		for (int bx = 0; bx < bw; bx++) {
+			uint8_t a = bmp[by * bw + bx];
+
+			if (!aa)
+				a = (a > 128) ? 255 : 0;
+
+			blend(dst, w, h, x + bx, y + by, a, fg);
+		}
+	}
+}
 
 /**
  * @brief blend a pixel using alpha compositong
@@ -122,27 +139,37 @@ void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
 }
 
 void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
-                    int baseline, uint32_t cp, uint32_t fg)
+		int baseline, uint32_t cp, uint32_t fg)
 {
-	Glyph* g;
-
-	if (!f || !f->font || !dst)
+	if (!f || !dst)
 		return;
 
-	g = get_glyph(f, cp);
+	if (f->kind == FONT_BDF) {
+		if (!f->bdf || cp >= BDF_GLYPHS_MAX)
+			return;
+
+		BdfGlyph* g = &f->bdf[cp];
+		if (!g->valid)
+			return;
+
+		draw_bitmap(
+			dst, w, h, g->bmp, g->w, g->h, x + g->xoff,
+			baseline - g->yoff - g->h, 1, fg
+		);
+
+		return;
+	}
+
+	if (!f->font)
+		return;
+
+	Glyph* g = get_glyph(f, cp);
 	if (!g)
 		return;
 
-	for (int by = 0; by < g->h; by++) {
-		for (int bx = 0; bx < g->w; bx++) {
-			uint8_t a = g->bmp[(by * g->w) + bx];
-			uint8_t aa = f->aa ? a : (a > 128 ? 255 : 0);
-
-			int dst_x = x + g->lsb + bx;
-			int dst_y = baseline + g->yoff + by;
-
-			blend(dst, w, h, dst_x, dst_y, aa, fg);
-		}
-	}
+	draw_bitmap(
+		dst, w, h, g->bmp, g->w, g->h, x + g->lsb,
+		baseline + g->yoff, f->aa, fg
+	);
 }
 
