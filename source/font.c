@@ -1,9 +1,64 @@
+#include <ctype.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "font.h"
 #include "schrift.h"
+
+static int strcicmp(char const* a, char const* b);
+static int type(const char* path);
+
+/**
+ * @brief case insensitive string compare
+ *
+ * @param a string1 to compare
+ * @param b string2 to compare
+ *
+ * @return -1=(a<b), 0=(a==b), 1=(a>b)
+ */
+static int strcicmp(char const* a, char const* b)
+{
+	int la;
+	int lb;
+	while (*a && *b) {
+		la = tolower((unsigned char)*a);
+		lb = tolower((unsigned char)*b);
+		if (la != lb)
+			return la - lb;
+		a++;
+		b++;
+	}
+
+	return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+}
+
+/**
+ * @brief determine the type of font being used
+ * 
+ * @note only BDF or !BDF right now
+ *
+ * @param path path to font
+ *
+ * @return -1=failed to determine, 0=BDF, 1=!BDF
+ */
+static int type(const char* path)
+{
+	size_t pl = strlen(path);
+
+	if (pl < 3)
+		return -1;
+
+	char ext[4];
+	memcpy(ext, path + pl - 3, 3);
+	ext[3] = '\0';
+
+	if (strcicmp(ext, "bdf") == 0)
+		return 0; /* BDF */
+
+	return 1; /* not BDF */
+}
 
 int font_load(Fontface* f, const char* path, double size)
 {
