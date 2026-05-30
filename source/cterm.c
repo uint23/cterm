@@ -178,7 +178,12 @@ static void init(void)
 	if (term.ptypid == 0) {
 		/* TODO: change later */
 		setenv("TERM", "vt100", 1);
-		execlp("/bin/sh", "sh", "-i", NULL);
+
+		/* shell */
+		if (shell == NULL)
+			shell = getenv("SHELL");
+
+		execl(shell, "-i", NULL);
 		_exit(127);
 	}
 
