@@ -19,13 +19,11 @@
 #include <RGFW.h>
 #include <schrift.h>
 
+#include "config.h"
 #include "draw.h"
 #include "font.h"
 #include "term.h"
 #include "utils.h"
-
-#define START_COLS   80
-#define START_ROWS   24
 
 static void cleanup(void);
 static void handle_key(RGFW_event ev);
@@ -140,19 +138,18 @@ static void init(void)
 	setlocale(LC_CTYPE, "");
 
 	/* font */
-	/* TODO: paths */
-	if (font_load(&font, "./Xanh.ttf", 24.0) < 0)
+	if (font_load(&font, font_path, font_size) < 0)
 		die(1, "failed to load font");
-	font.aa = true;
+	font.aa = antialias;
 
-	winw = START_COLS*font.cellw;
-	winh = START_ROWS*font.cellh;
+	winw = win_width*font.cellw;
+	winh = win_height*font.cellh;
 
-	if (term_resize(&term, &car, START_COLS, START_ROWS) < 0)
+	if (term_resize(&term, &car, win_width, win_height) < 0)
 		die(1, "failed to resize terminal");
 
 	/* window */
-	if (!(win = RGFW_createWindow("cterm", 0, 0, winw, winh, 0)))
+	if (!(win = RGFW_createWindow(win_title, 0, 0, winw, winh, 0)))
 		die(1, "failed to create window");
 
 	pixels = calloc(winw*winh, sizeof(*pixels));
@@ -177,7 +174,7 @@ static void init(void)
 		die(EXIT_FAILURE, "failed to fork pty");
 	if (term.ptypid == 0) {
 		/* TODO: change later */
-		setenv("TERM", "vt100", 1);
+		setenv("TERM", term_name, 1);
 
 		/* shell */
 		if (shell == NULL)
@@ -243,7 +240,8 @@ static void ptywrite(const char* s, size_t n)
 	}
 }
 
-/** TODO
+/** 
+ * @brief resize pty to reflect window size
  */
 static void resize_pty(void)
 {
@@ -258,7 +256,8 @@ static void resize_pty(void)
 		ioctl(term.ptyfd, TIOCSWINSZ, &ws);
 }
 
-/** TODO
+/** 
+ * @brief resize window surface to reflect resized size
  */
 static int resize_surface(int w, int h)
 {

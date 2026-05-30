@@ -6,11 +6,11 @@
 #include <stdlib.h>
 
 static const char* font_path = "./Xanh.bdf";
-static const float font_size = 24.0f;/* BDF fonts ignore font_size */
-static const int   antialias = true; /* BDF fonts are not affected */
+static const float font_size = 24.0f; /* Bitmap fonts ignore font_size */
+static const int   antialias = true;  /* Bitmap fonts are not affected */
 
-static const int   win_width = 800;
-static const int   win_height = 600;
+static const int   win_width = 80;  /* in columns */
+static const int   win_height = 24; /* in rows */
 static const char* win_title = "cterm";
 
 static const int   pad_x = 8;
@@ -44,21 +44,6 @@ static const uint32_t color_table[16] = {
 	0xff34e2e2, /* bright cyan */
 	0xffffffff, /* bright white */
 };
-
-/* Key sequences
-   These are for physical/special keys only.
-   Text input should come from translated character events.
- */
-static const char *key_up        = "\x1b[A";
-static const char *key_down      = "\x1b[B";
-static const char *key_right     = "\x1b[C";
-static const char *key_left      = "\x1b[D";
-static const char *key_home      = "\x1b[H";
-static const char *key_end       = "\x1b[F";
-static const char *key_insert    = "\x1b[2~";
-static const char *key_delete    = "\x1b[3~";
-static const char *key_page_up   = "\x1b[5~";
-static const char *key_page_down = "\x1b[6~";
 
 #endif /* CONFIG_H */
 
