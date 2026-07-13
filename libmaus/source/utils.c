@@ -3,7 +3,7 @@
 
 #include "utils.h"
 
-char* strdup(const char* src)
+char* maus_strdup(const char* src)
 {
 	if (src == NULL)
 		return NULL;

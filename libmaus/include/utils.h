@@ -5,7 +5,7 @@
    newly allocated string buffer. if NULL, allocation
    failed or src is NULL
    note: you must free this newly allocated string */
-char* strdup(const char* src);
+char* maus_strdup(const char* src);
 
 #endif /* UTIL_H */
 

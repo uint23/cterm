@@ -369,7 +369,7 @@ void maus_clipboard_set_text(Maus* mw, const char* text)
 	}
 
 	if (text)
-		mw->clipboard = strdup(text);
+		mw->clipboard = maus_strdup(text);
 
 	Atom clipboard = XInternAtom(be->display, "CLIPBOARD", False);
 	XSetSelectionOwner(be->display, clipboard, be->win, CurrentTime);
@@ -418,7 +418,7 @@ char* maus_clipboard_get_text(Maus* mw)
 
 	char* res = NULL;
 	if (prop_data) {
-		res = strdup((char*)prop_data);
+		res = maus_strdup((char*)prop_data);
 		XFree(prop_data);
 	}
 
