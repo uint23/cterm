@@ -5,19 +5,6 @@
 
 #include "font.h"
 
-#define GLYPH_CACHE_MAX 256
-
-#define Glyph _Glyph /* Xrender defines the same */
-typedef struct {
-	bool           valid;
-	uint32_t       cp;
-	int            w;
-	int            h;
-	int            lsb;
-	int            yoff;
-	uint8_t*       bmp;
-} Glyph;
-
 /**
  * @brief clear a buffer size wxh
  *

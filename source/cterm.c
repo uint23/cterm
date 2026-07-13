@@ -15,7 +15,6 @@
 #include <unistd.h>
 
 #include <maus.h>
-#include <schrift.h>
 
 #include "config.h"
 #include "draw.h"
@@ -110,9 +109,8 @@ static void init(void)
 	setlocale(LC_CTYPE, "");
 
 	/* font */
-	if (font_load(&font, font_path, font_size) < 0)
+	if (font_load(&font, font_path) < 0)
 		die(1, "failed to load font");
-	font.aa = antialias;
 
 	winw = win_width*font.cellw;
 	winh = win_height*font.cellh;

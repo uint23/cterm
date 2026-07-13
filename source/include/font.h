@@ -2,15 +2,9 @@
 #define FONT_H
 
 #include <stdbool.h>
-
-#include <schrift.h>
+#include <stdint.h>
 
 #define BDF_GLYPHS_MAX (65536)
-
-typedef enum {
-	FONT_BDF,
-	FONT_SFT,
-} FontKind;
 
 typedef struct {
 	bool          valid;
@@ -24,19 +18,12 @@ typedef struct {
 typedef BdfFont BdfGlyph;
 
 typedef struct {
-	FontKind      kind;
-
-	SFT_Font*     font;
-	SFT           sft;
-
 	BdfFont*      bdf;
 
-	double        size;
 	double        asc;   /* ascent */
 	double        dsc;   /* descent */
 	int           cellw;
 	int           cellh;
-	bool          aa;    /* anti-aliasing */
 } Fontface;
 
 /**
@@ -44,11 +31,9 @@ typedef struct {
  *
  * @param f font struct to write info to
  * @param path font path
- * @param size size of font
- *
  * @return 0=success, -1=failed
  */
-int font_load(Fontface* f, const char* path, double size);
+int font_load(Fontface* f, const char* path);
 
 /**
  * @brief free a loaded font

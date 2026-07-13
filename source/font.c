@@ -1,17 +1,14 @@
 #include <ctype.h>
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "font.h"
-#include "schrift.h"
 
 static int load_bdf(Fontface* f, const char* path);
-static int load_sft(Fontface* f, const char* path, double size);
 static int strcicmp(char const* a, char const* b);
-static int type(const char* path);
+static bool is_bdf(const char* path);
 
 /*
  * @brief load a bdf font
@@ -23,8 +20,6 @@ static int type(const char* path);
  */
 static int load_bdf(Fontface* f, const char* path)
 {
-	f->kind = FONT_BDF;
-
 	FILE* fp;
 	fp = fopen(path, "r");
 	if (!fp)
@@ -167,7 +162,6 @@ static int load_bdf(Fontface* f, const char* path)
 	f->asc = asc;
 	f->dsc = -dsc;
 	f->cellh = asc + dsc;
-	f->size = f->cellh;
 
 	if (f->cellw <= 0 || f->cellh <= 0) {
 		font_free(f);
@@ -175,67 +169,6 @@ static int load_bdf(Fontface* f, const char* path)
 	}
 
 	return 0;
-}
-
-/*
- * @brief load an sft font
- *
- * @param f fontface to load font into
- * @param path path to load font from
- * @param size size to load font as
- *
- * @return -1=failed to load font, 0=success
- */
-static int load_sft(Fontface* f, const char* path, double size)
-{
-	f->kind = FONT_SFT;
-
-	SFT_LMetrics lm;
-	SFT_Glyph glyph;
-	SFT_GMetrics gm;
-
-	if (!f || !path || size <= 0)
-		return -1;
-
-	f->font = sft_loadfile(path);
-	if (!f->font)
-		return -1;
-
-	/* configure font */
-	f->size = size;
-	f->sft.font = f->font;
-	f->sft.xScale = size;
-	f->sft.yScale = size;
-	f->sft.xOffset = 0;
-	f->sft.yOffset = 0;
-	f->sft.flags = SFT_DOWNWARD_Y;
-
-	/* get font line metrics */
-	if (sft_lmetrics(&f->sft, &lm) < 0)
-		goto fail;
-
-	f->asc = lm.ascender;
-	f->dsc = lm.descender;
-
-	/* cell height */
-	f->cellh = (int)ceil(lm.ascender - lm.descender + lm.lineGap);
-
-	/* cell width */
-	if (sft_lookup(&f->sft, 'A', &glyph) < 0)
-		goto fail;
-	if (sft_gmetrics(&f->sft, glyph, &gm) < 0)
-		goto fail;
-
-	f->cellw = (int)ceil(gm.advanceWidth);
-
-	if (f->cellw <= 0 || f->cellh <= 0)
-		goto fail;
-	
-	return 0;
-
-fail:
-	font_free(f);
-	return -1;
 }
 
 /**
@@ -263,50 +196,42 @@ static int strcicmp(char const* a, char const* b)
 }
 
 /**
- * @brief determine the type of font being used
+ * @brief determine if the font path points to a BDF font
  * 
- * @note only BDF or !BDF right now
- *
  * @param path path to font
  *
- * @return -1=failed to determine, FONT_BDF, FONT_SFT
+ * @return true if path ends in .bdf
  */
-static int type(const char* path)
+static bool is_bdf(const char* path)
 {
 	size_t pl = strlen(path);
 
 	if (pl < 4)
-		return -1;
+		return false;
 
-	if (strcicmp(path + pl - 4, ".bdf") == 0)
-		return FONT_BDF;
-	return FONT_SFT;
+	return strcicmp(path + pl - 4, ".bdf") == 0;
 }
 
-int font_load(Fontface* f, const char* path, double size)
+int font_load(Fontface* f, const char* path)
 {
-	int t;
+	int ret;
 
 	if (!f || !path)
 		return -1;
 
 	memset(f, 0, sizeof(*f));
 
-	t = type(path);
-	if (t < 0)
+	if (!is_bdf(path))
 		return -1;
 
-	if (t == FONT_BDF) {
-		f->bdf = calloc(BDF_GLYPHS_MAX, sizeof(*f->bdf));
-		if (!f->bdf)
-			return -1;
-		return load_bdf(f, path);
-	}
-
-	if (size <= 0)
+	f->bdf = calloc(BDF_GLYPHS_MAX, sizeof(*f->bdf));
+	if (!f->bdf)
 		return -1;
 
-	return load_sft(f, path, size);
+	ret = load_bdf(f, path);
+	if (ret < 0)
+		font_free(f);
+	return ret;
 }
 
 void font_free(Fontface* f)
@@ -314,10 +239,7 @@ void font_free(Fontface* f)
 	if (!f)
 		return;
 
-	if (f->font)
-		sft_freefont(f->font);
-
-	if (f->kind == FONT_BDF) {
+	if (f->bdf) {
 		for (int i = 0; i < BDF_GLYPHS_MAX; i++)
 			free(f->bdf[i].bmp);
 		free(f->bdf);
@@ -325,3 +247,4 @@ void font_free(Fontface* f)
 
 	memset(f, 0, sizeof(*f));
 }
+
