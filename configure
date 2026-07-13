@@ -2,10 +2,24 @@
 
 PLATFORM=$(uname)
 
-LINUX_LDFLAGS="-lX11 -lXrandr"
-LINUX_CPPFLAGS="-D_XOPEN_SOURCE=700"
-FREEBSD_LDFLAGS="-lX11 -lXrandr"
-OPENBSD_LDFLAGS="-I/usr/X11R6/include -L/usr/X11R6/lib -lX11 -lXrandr"
+if [ -n "$WAYLAND_DISPLAY" ]; then
+	UNIX_BACKEND=-DBACKEND_WAY
+elif [ -n "$DISPLAY" ]; then
+	UNIX_BACKEND=-DBACKEND_X11
+else
+	echo "Neither Xorg or Wayland detected! Aborting..." >&2
+	exit 1
+fi
+
+LINUX_LDFLAGS="-lX11 -lXext"
+LINUX_CPPFLAGS="-D_XOPEN_SOURCE=700 $UNIX_BACKEND"
+
+FREEBSD_LDFLAGS="-lX11 -lXext"
+FREEBSD_CPPFLAGS="$UNIX_BACKEND"
+
+OPENBSD_LDFLAGS="-I/usr/X11R6/include -L/usr/X11R6/lib -lX11 -lXext"
+OPENBSD_CPPFLAGS="$UNIX_BACKEND"
+
 MACOS_LDFLAGS="-framework Cocoa -framework CoreVideo -framework IOKit -framework CoreGraphics -framework CoreFoundation -framework Carbon"
 
 {
@@ -18,10 +32,12 @@ MACOS_LDFLAGS="-framework Cocoa -framework CoreVideo -framework IOKit -framework
 		FreeBSD)
 			echo "# FreeBSD"
 			echo "LDFLAGS += $FREEBSD_LDFLAGS"
+			echo "CPPFLAGS += $FREEBSD_CPPFLAGS"
 			;;
 		OpenBSD)
 			echo "# OpenBSD"
 			echo "LDFLAGS += $OPENBSD_LDFLAGS"
+			echo "CPPFLAGS += $OPENBSD_CPPFLAGS"
 			;;
 		Darwin)
 			echo "# Darwin"
@@ -33,4 +49,3 @@ MACOS_LDFLAGS="-framework Cocoa -framework CoreVideo -framework IOKit -framework
 			;;
 	esac
 } > platform.mk
-
