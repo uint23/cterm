@@ -180,7 +180,8 @@ static void init(void)
 		if (shell == NULL)
 			shell = getenv("SHELL");
 
-		execl(shell, "-i", NULL);
+		execl(shell, shell, "-i", (char *)NULL);
+
 		_exit(127);
 	}
 
