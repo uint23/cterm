@@ -1,0 +1,15 @@
+*.o
+*.swp
+*.a
+*.exe
+*.obj
+*.lib
+
+compile_flags.txt
+
+fenster/
+
+examples/basic-window/basic-window
+
+config.mk
+
