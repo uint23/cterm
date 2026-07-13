@@ -1,5 +1,3 @@
-#include <sys/wait.h>
-#define RGFW_IMPLEMENTATION
 #include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
@@ -16,7 +14,7 @@
 #endif
 #include <unistd.h>
 
-#include <RGFW.h>
+#include <maus.h>
 #include <schrift.h>
 
 #include "config.h"
@@ -26,21 +24,19 @@
 #include "utils.h"
 
 static void cleanup(void);
-static void handle_key(RGFW_event ev);
+static void handle_key(const MausEvent* ev);
 static void init(void);
 static bool ptyread(void);
 static void ptywrite(const char* s, size_t n);
 static void resize_pty(void);
-static int resize_surface(int w, int h);
+static int resize_window(int w, int h);
 static void resize_terminal(int w, int h);
 static void run(void);
 static void wait_events(void);
 
 static Fontface font;
 static Caret car;
-static RGFW_window* win = NULL;
-static RGFW_surface* surf = NULL;
-static uint32_t* pixels = NULL;
+static Maus* win = NULL;
 static int winw;
 static int winh;
 
@@ -64,12 +60,10 @@ static void cleanup(void)
 	free(term.alt);
 	font_free(&font);
 
-	if (surf)
-		RGFW_surface_free(surf);
-	if (pixels)
-		free(pixels);
-	if (win)
-		RGFW_window_close(win);
+	if (win) {
+		maus_close(win);
+		free(win);
+	}
 }
 
 /**
@@ -77,56 +71,34 @@ static void cleanup(void)
  *
  * @param c character check dispatch
  */
-static void handle_key(RGFW_event ev)
+static void handle_key(const MausEvent* ev)
 {
-	int skip_keypress = 0;
+	char text;
 
-	/* regular character-
-	   dont have to handle e.g. shift cases:
-	   SHIFT+1 or `!`
-	 */
-	if (ev.type == RGFW_keyChar) {
-		uint32_t cp = ev.keyChar.value;
-
-		skip_keypress = 1; /* key handled */
-
-		if (cp <= 0x7F) {
-			char cpch = (char)cp;
-			ptywrite(&cpch, 1);
-			return;
-		}
-
-		/* TODO? encode non ascii->UTF-8 */
+	if (ev->type != MAUS_EV_KEY || !ev->key.pressed)
 		return;
-	}
 
-	/* special character */
-	if (ev.type == RGFW_keyPressed) {
-		RGFW_key key = ev.key.value;
-
-		if (skip_keypress) {
-			skip_keypress = 0;
-			return;
-		}
-
-		switch(key) {
-		case RGFW_keyReturn:
-		case RGFW_keyPadReturn: ptywrite("\r", 1); break;
-		case RGFW_keyBackSpace: ptywrite("\x7F", 1); break;
-		case RGFW_keyTab:       ptywrite("\t",  1); break;
-		case RGFW_keyEscape:    ptywrite("\x1B", 1); break;
-		case RGFW_keyUp:        ptywrite("\x1B[A", 3); break;
-		case RGFW_keyDown:      ptywrite("\x1B[B", 3); break;
-		case RGFW_keyRight:     ptywrite("\x1B[C", 3); break;
-		case RGFW_keyLeft:      ptywrite("\x1B[D", 3); break;
-		case RGFW_keyHome:      ptywrite("\x1B[H", 3); break;
-		case RGFW_keyEnd:       ptywrite("\x1B[F", 3); break;
-		case RGFW_keyInsert:    ptywrite("\x1B[2~", 4); break;
-		case RGFW_keyDelete:    ptywrite("\x1B[3~", 4); break;
-		case RGFW_keyPageUp:    ptywrite("\x1B[5~", 4); break;
-		case RGFW_keyPageDown:  ptywrite("\x1B[6~", 4); break;
-		default: break;
-		}
+	switch(ev->key.key) {
+	case MAUS_KEY_ENTER:
+	case MAUS_KEY_KP_ENTER: ptywrite("\r", 1); break;
+	case MAUS_KEY_BACKSPACE: ptywrite("\x7F", 1); break;
+	case MAUS_KEY_TAB:       ptywrite("\t",  1); break;
+	case MAUS_KEY_ESCAPE:    ptywrite("\x1B", 1); break;
+	case MAUS_KEY_UP:        ptywrite("\x1B[A", 3); break;
+	case MAUS_KEY_DOWN:      ptywrite("\x1B[B", 3); break;
+	case MAUS_KEY_RIGHT:     ptywrite("\x1B[C", 3); break;
+	case MAUS_KEY_LEFT:      ptywrite("\x1B[D", 3); break;
+	case MAUS_KEY_HOME:      ptywrite("\x1B[H", 3); break;
+	case MAUS_KEY_END:       ptywrite("\x1B[F", 3); break;
+	case MAUS_KEY_INSERT:    ptywrite("\x1B[2~", 4); break;
+	case MAUS_KEY_DELETE:    ptywrite("\x1B[3~", 4); break;
+	case MAUS_KEY_PAGE_UP:   ptywrite("\x1B[5~", 4); break;
+	case MAUS_KEY_PAGE_DOWN: ptywrite("\x1B[6~", 4); break;
+	default:
+		text = ev->key.text;
+		if (text != '\0')
+			ptywrite(&text, 1);
+		break;
 	}
 }
 
@@ -149,18 +121,11 @@ static void init(void)
 		die(1, "failed to resize terminal");
 
 	/* window */
-	if (!(win = RGFW_createWindow(win_title, 0, 0, winw, winh, 0)))
+	win = maus_init(win_title, 0, 0, winw, winh);
+	if (!win)
+		die(1, "failed to init window");
+	if (!maus_create_window(win))
 		die(1, "failed to create window");
-
-	pixels = calloc(winw*winh, sizeof(*pixels));
-	if (!pixels)
-		die(1, "failed to alloc pixel buffer");
-
-	surf = RGFW_window_createSurface(
-		win, (u8*)pixels, winw, winh, RGFW_formatRGBA8
-	);
-	if (!surf)
-		die(1, "failed to create window surface");
 
 	/* pty */
 	struct winsize ws = {
@@ -258,36 +223,20 @@ static void resize_pty(void)
 }
 
 /** 
- * @brief resize window surface to reflect resized size
+ * @brief resize window framebuffer to reflect resized size
  */
-static int resize_surface(int w, int h)
+static int resize_window(int w, int h)
 {
-	uint32_t* npixels;
-	RGFW_surface* nsurf;
-
 	if (w < 1)
 		w = 1;
 	if (h < 1)
 		h = 1;
 
-	npixels = calloc(w*h, sizeof(*npixels));
-	if (!npixels)
+	if (w == winw && h == winh)
+		return 0;
+
+	if (!maus_resize(win, w, h))
 		return -1;
-
-	nsurf = RGFW_window_createSurface(
-		win, (u8*)npixels, w, h, RGFW_formatRGBA8
-	);
-	if (!nsurf) {
-		free(npixels);
-		return -1;
-	}
-
-	if (surf)
-		RGFW_surface_free(surf);
-	free(pixels);
-
-	pixels = npixels;
-	surf = nsurf;
 	winw = w;
 	winh = h;
 
@@ -320,33 +269,35 @@ static void resize_terminal(int w, int h)
  */
 static void run(void)
 {
-	RGFW_event ev;
+	MausEvent ev;
 	Caret ocar = { -1, -1 };
+	bool running = true;
 	bool dirty = true;
 	bool redraw_all = true;
 
-	while (!RGFW_window_shouldClose(win)) {
-		while (RGFW_window_checkEvent(win, &ev)) {
-			if (ev.type == RGFW_windowResized) {
-				if (resize_surface(ev.update.w, ev.update.h) < 0)
-					die(EXIT_FAILURE, "failed to resize surface");
-				resize_terminal(ev.update.w, ev.update.h);
-				term_damage_all(&term);
-				dirty = true;
-				continue;
+	while (running) {
+		while (maus_event_poll(win, &ev)) {
+			if (ev.type == MAUS_EV_CLOSE) {
+				running = false;
+				break;
 			}
 
-			if (ev.type == RGFW_windowRefresh ||
-			    ev.type == RGFW_windowFocusIn ||
-			    ev.type == RGFW_windowRestored) {
+			if (ev.type == MAUS_EV_RESIZE) {
+				if (resize_window(ev.resize.width, ev.resize.height) < 0)
+					die(EXIT_FAILURE, "failed to resize window");
+				resize_terminal(ev.resize.width, ev.resize.height);
 				term_damage_all(&term);
 				dirty = true;
 				redraw_all = true;
 				continue;
 			}
 
-			handle_key(ev);
+
+			handle_key(&ev);
 		}
+
+		if (!running)
+			break;
 
 		if (ptyread())
 			dirty = true;
@@ -363,7 +314,7 @@ static void run(void)
 		}
 
 		if (redraw_all) {
-			draw_clear(pixels, winw, winh, rgba(0, 0, 0, 255));
+			draw_clear(win->bfb, win->stride, winh, rgba(0, 0, 0, 255));
 		}
 
 		for (int y = 0; y < term.rows; y++) {
@@ -379,13 +330,13 @@ static void run(void)
 					continue;
 
 				draw_rune(
-					pixels, winw, winh, x, y,
+					win->bfb, win->stride, winh, x, y,
 					font.cellw, font.cellh, bg
 				);
 
 				if (r->cp != ' ') {
 					draw_codepoint(
-						&font, pixels, winw, winh,
+						&font, win->bfb, win->stride, winh,
 						x * font.cellw,
 						y * font.cellh + (int)font.asc,
 						r->cp,
@@ -397,7 +348,8 @@ static void run(void)
 			}
 		}
 
-		RGFW_window_blitSurface(win, surf);
+		maus_target_fps(win, win_fps);
+		maus_present(win);
 
 		ocar = car;
 		dirty = false;
@@ -416,7 +368,11 @@ static void wait_events(void)
 	};
 
 	if (term.ptyfd < 0) {
-		RGFW_waitForEvent(16);
+		struct timespec ts = {
+			.tv_sec = 0,
+			.tv_nsec = 16 * 1000 * 1000, /* TODO? libmaus */
+		};
+		nanosleep(&ts, NULL);
 		return;
 	}
 

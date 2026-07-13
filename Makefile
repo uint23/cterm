@@ -1,6 +1,6 @@
 CC = cc
 CFLAGS = -std=c99 -Wall -Wextra
-CPPFLAGS = -Isource/external -Isource/include
+CPPFLAGS = -Isource/include -Ilibmaus/include
 
 LDFLAGS = -lschrift -lgrapheme -lm
 
@@ -10,7 +10,10 @@ SRCS = source/cterm.c \
        source/utils.c  \
        source/font.c  \
        source/term.c  \
-       source/draw.c
+       source/draw.c  \
+       libmaus/source/maus.c     \
+       libmaus/source/maus_x11.c \
+       libmaus/source/utils.c
 OUT = cterm
 
 all:

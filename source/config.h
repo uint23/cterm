@@ -5,13 +5,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-static const char* font_path = "./Xanh.bdf";
+static const char* font_path = "/home/seiko/programming/c/cterm/Xanh.bdf";
 static const float font_size = 24.0f; /* Bitmap fonts ignore font_size */
 static const int   antialias = true;  /* Bitmap fonts are not affected */
 
 static const int   win_width = 80;  /* in columns */
 static const int   win_height = 24; /* in rows */
 static const char* win_title = "cterm";
+static const int   win_fps = 60;
 
 static const int   pad_x = 8;
 static const int   pad_y = 8;
