@@ -316,6 +316,11 @@ static void run(void)
 				continue;
 			}
 
+			if (ev.type == MAUS_EV_REDRAW) {
+				dirty = true;
+				continue;
+			}
+
 			if (handle_key(&ev)) {
 				dirty = true;
 				redraw_all = true;
