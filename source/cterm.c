@@ -81,7 +81,7 @@ static bool handle_key(const MausEvent* ev)
 
 	if (win->key_syms[MAUS_KEY_ALT_R] &&
 	   (ev->key.key == MAUS_KEY_R ||
-	    ev->key.key[MAUS_KEY_R_UP]))
+	    ev->key.key == MAUS_KEY_R_UP))
 		return reload_font();
 
 	switch(ev->key.key) {
