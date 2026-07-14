@@ -5,7 +5,7 @@
 
 #include <grapheme.h>
 
-#include "config.h"
+#include "../config.h"
 #include "term.h"
 #include "utils.h"
 

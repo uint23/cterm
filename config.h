@@ -5,18 +5,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-static const char* font_path = "/home/seiko/programming/c/cterm/Xanh.bdf";
+static const char font_path[] = "/home/seiko/programming/c/cterm/Xanh.bdf";
 
 static const int   win_width = 80;  /* in columns */
 static const int   win_height = 24; /* in rows */
-static const char* win_title = "cterm";
+static const char win_title[] = "cterm";
 static const int   win_fps = 60;
 
 static const int   pad_x = 8;
 static const int   pad_y = 8;
 
-static const char* shell = NULL; /* NULL uses $SHELL */
-static const char* term_name = "vt100";
+static const char* const shell = NULL; /* NULL uses $SHELL */
+static const char term_name[] = "vt100";
 
 /* AARRGGBB */
 static const uint32_t default_fg = 0xffffffff;
@@ -45,4 +45,3 @@ static const uint32_t color_table[16] = {
 };
 
 #endif /* CONFIG_H */
-

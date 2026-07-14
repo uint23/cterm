@@ -16,7 +16,7 @@
 
 #include <maus.h>
 
-#include "config.h"
+#include "../config.h"
 #include "draw.h"
 #include "font.h"
 #include "term.h"
@@ -140,10 +140,11 @@ static void init(void)
 		setenv("TERM", term_name, 1);
 
 		/* shell */
-		if (shell == NULL)
-			shell = getenv("SHELL");
+		const char* sh = shell;
+		if (sh == NULL)
+			sh = getenv("SHELL");
 
-		execl(shell, shell, "-i", (char *)NULL);
+		execl(sh, sh, "-i", (char *)NULL);
 
 		_exit(127);
 	}
