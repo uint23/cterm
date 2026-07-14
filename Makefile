@@ -1,6 +1,6 @@
 CC = cc
 CFLAGS = -std=c99 -Wall -Wextra
-CPPFLAGS = -Isource/include -Ilibmaus/include
+CPPFLAGS = -Iinclude -Ilibmaus/include
 
 LDFLAGS = -lgrapheme
 
