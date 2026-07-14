@@ -193,6 +193,12 @@ static bool handle_event(XEvent* xev, MausEvent* ev, Maus* mw)
 	MausMouseButton mbtype;
 
 	switch (xev->type) {
+		case Expose:
+			if (xev->xexpose.count != 0)
+				return false;
+			ev->type = MAUS_EV_REDRAW;
+			return true;
+
 		case ClientMessage:
 			if ((Atom)xev->xclient.data.l[0] == be->atoms[MAUS_ATOM_WM_DELETE_WINDOW]) {
 				ev->type = MAUS_EV_CLOSE;
