@@ -31,3 +31,6 @@ do!).
 
 Reloading the font can be done with `AltR + r`
 
+There is also a ![font scaling program](scripts/fontscale) provided which uses
+`otf2ttf` to scale any font in a libary if needed.
+
