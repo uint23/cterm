@@ -27,8 +27,7 @@ static void sgr(Term* t);
 static void utf8_flush(Term* t, Caret* c);
 static void utf8_putc(Term* t, Caret* c, unsigned char ch);
 
-/** TODO
- */
+/* TODO */
 static uint32_t acs_map(unsigned char ch)
 {
 	switch (ch) {
@@ -46,8 +45,7 @@ static uint32_t acs_map(unsigned char ch)
 	}
 }
 
-/** TODO
- */
+/* TODO */
 static int csi_arg(Term* t, int i, int fallback)
 {
 	if (i > t->csi_idx)
@@ -58,8 +56,7 @@ static int csi_arg(Term* t, int i, int fallback)
 	return t->csi_params[i];
 }
 
-/** TODO
- */
+/* TODO */
 static void alt_screen(Term* t, Caret* c, bool on)
 {
 	Rune* tmp;
@@ -84,8 +81,7 @@ static void alt_screen(Term* t, Caret* c, bool on)
 	term_damage_all(t);
 }
 
-/** TODO
- */
+/* TODO */
 static void chars_insert(Term* t, Caret* c, int n)
 {
 	int cols = t->cols - c->x;
@@ -100,8 +96,7 @@ static void chars_insert(Term* t, Caret* c, int n)
 		RUNE(t, x, c->y).dmg = true;
 }
 
-/** TODO
- */
+/* TODO */
 static void chars_delete(Term* t, Caret* c, int n)
 {
 	int cols = t->cols - c->x;
@@ -116,8 +111,7 @@ static void chars_delete(Term* t, Caret* c, int n)
 		RUNE(t, x, c->y).dmg = true;
 }
 
-/** TODO
- */
+/* TODO */
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 {
 	switch (ch) {
@@ -301,11 +295,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	}
 }
 
-/**
- * @brief erase CSI parameters
- *
- * @param t term instance to reset
- */
+/* erase CSI parameters */
 static void csi_reset(Term* t)
 {
 	for (int i = 0; i < CSI_PARAMS_MAX; i++)
@@ -313,8 +303,7 @@ static void csi_reset(Term* t)
 	t->csi_idx = 0;
 }
 
-/** TODO
- */
+/* TODO */
 static int cp_width(uint32_t cp)
 {
 	int w = wcwidth((wchar_t)cp);
@@ -326,8 +315,7 @@ static int cp_width(uint32_t cp)
 	return w;
 }
 
-/** TODO
- */
+/* TODO */
 static void erase_display(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
@@ -361,8 +349,7 @@ static void erase_display(Term* t, Caret* c)
 	}
 }
 
-/** TODO
- */
+/* TODO */
 static void erase_line(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
@@ -373,8 +360,7 @@ static void erase_line(Term* t, Caret* c)
 		reset_rune(t, x, c->y);
 }
 
-/** TODO
- */
+/* TODO */
 static void reset_rune(Term* t, int x, int y)
 {
 	Rune* r = &(RUNE(t, x, y));
@@ -386,8 +372,7 @@ static void reset_rune(Term* t, int x, int y)
 	r->dmg = true;
 }
 
-/** TODO
- */
+/* TODO */
 static void rune_prepare(Term* t, int x, int y)
 {
 	if (x > 0 && RUNE(t, x, y).width == 0)
@@ -396,8 +381,7 @@ static void rune_prepare(Term* t, int x, int y)
 		reset_rune(t, x + 1, y);
 }
 
-/** TODO
- */
+/* TODO */
 static void scroll_down(Term* t, int top, int bot, int n)
 {
 	int cols = t->cols;
@@ -416,8 +400,7 @@ static void scroll_down(Term* t, int top, int bot, int n)
 	term_damage_all(t);
 }
 
-/** TODO
- */
+/* TODO */
 static void scroll_up(Term* t, int top, int bot, int n)
 {
 	int cols = t->cols;
@@ -436,8 +419,7 @@ static void scroll_up(Term* t, int top, int bot, int n)
 	term_damage_all(t);
 }
 
-/** TODO
- */
+/* TODO */
 static void sgr(Term* t)
 {
 	for (int i = 0; i <= t->csi_idx; i++) {
@@ -480,8 +462,7 @@ static void sgr(Term* t)
 	}
 }
 
-/** TODO
- */
+/* TODO */
 static void utf8_flush(Term* t, Caret* c)
 {
 	if (t->utf8_len == 0)
@@ -490,8 +471,8 @@ static void utf8_flush(Term* t, Caret* c)
 	t->utf8_len = 0;
 }
 
-/** TODO
- */
+/* buffer and decode utf8 to code points, then write
+   using current character set */
 static void utf8_putc(Term* t, Caret* c, unsigned char ch)
 {
 	uint_least32_t cp;
@@ -675,12 +656,8 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 		int copyrows = orows < rows ? orows : rows;
 		int copycols = ocols < cols ? ocols : cols;
 
-		for (int y = 0; y < copyrows; y++) {
-			memcpy(
-				&nr[y * cols], &or[y * ocols],
-				sizeof(Rune) * copycols
-			);
-		}
+		for (int y = 0; y < copyrows; y++)
+			memcpy( &nr[y * cols], &or[y * ocols], sizeof(Rune) * copycols);
 	}
 
 	for (int y = 0; y < rows; y++) {
@@ -845,3 +822,4 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 
 	return damaged;
 }
+

@@ -10,14 +10,7 @@ static int load_bdf(Fontface* f, const char* path);
 static int strcicmp(char const* a, char const* b);
 static bool is_bdf(const char* path);
 
-/*
- * @brief load a bdf font
- *
- * @param f fontface to load font into
- * @param path path to load font from
- *
- * @return -1=fail, 0=success
- */
+/* load a bdf font into `f`,  -1 on fail, 0 on success */
 static int load_bdf(Fontface* f, const char* path)
 {
 	FILE* fp;
@@ -96,8 +89,7 @@ static int load_bdf(Fontface* f, const char* path)
 
 				/* each bmp row in BDF is padded as a multiple
 				   of 8 bits. this rounds width up to the next
-				   multiple of 8
-				 */
+				   multiple of 8 */
 				rowbits = (bw + 7) & ~7;
 
 				for (int y = 0; y < bh; y++) {
@@ -171,14 +163,8 @@ static int load_bdf(Fontface* f, const char* path)
 	return 0;
 }
 
-/**
- * @brief case insensitive string compare
- *
- * @param a string1 to compare
- * @param b string2 to compare
- *
- * @return -1=(a<b), 0=(a==b), 1=(a>b)
- */
+/* case insensitive string compare 
+   -1=(a<b), 0=(a==b), 1=(a>b) */
 static int strcicmp(char const* a, char const* b)
 {
 	int la;
@@ -195,13 +181,7 @@ static int strcicmp(char const* a, char const* b)
 	return tolower((unsigned char)*a) - tolower((unsigned char)*b);
 }
 
-/**
- * @brief determine if the font path points to a BDF font
- * 
- * @param path path to font
- *
- * @return true if path ends in .bdf
- */
+/* determine if font is BDF (by judging extension) */
 static bool is_bdf(const char* path)
 {
 	size_t pl = strlen(path);

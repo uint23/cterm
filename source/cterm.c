@@ -52,9 +52,7 @@ static Term term = {
 	.cursor_visible = true,
 };
 
-/**
- * @brief release resources, close window (TODO)
- */
+/* clean up resources */
 static void cleanup(void)
 {
 	free(term.runes);
@@ -67,11 +65,7 @@ static void cleanup(void)
 	}
 }
 
-/**
- * @brief dispatch correct key to pty
- *
- * @param c character check dispatch
- */
+/* dispatch correct keycode handling non ascii characters */
 static bool handle_key(const MausEvent* ev)
 {
 	char text;
@@ -110,9 +104,7 @@ static bool handle_key(const MausEvent* ev)
 	return false;
 }
 
-/**
- * @brief initialise: window (TODO)
- */
+/* initialise font, window, pty */
 static void init(void)
 {
 	setlocale(LC_CTYPE, "");
@@ -145,7 +137,6 @@ static void init(void)
 	if (term.ptypid < 0)
 		die(EXIT_FAILURE, "failed to fork pty");
 	if (term.ptypid == 0) {
-		/* TODO: change later */
 		setenv("TERM", term_name, 1);
 
 		/* shell */
@@ -165,9 +156,7 @@ static void init(void)
 	term_clear(&term, &car);
 }
 
-/**
- * @brief read data from master pty
- */
+/* read from pty master */
 static bool ptyread(void)
 {
 	char buf[4096];
@@ -192,12 +181,7 @@ static bool ptyread(void)
 	return damaged;
 }
 
-/**
- * @brief read data to master pty
- *
- * @param s string buffer to write to pty
- * @param n number of characters in buffer
- */
+/* write to pty master */
 static void ptywrite(const char* s, size_t n)
 {
 	while (n > 0) {
@@ -230,9 +214,7 @@ static bool reload_font(void)
 	return true;
 }
 
-/** 
- * @brief resize pty to reflect window size
- */
+/* resize pty to reflect terminal values */
 static void resize_pty(void)
 {
 	struct winsize ws = {
@@ -246,9 +228,7 @@ static void resize_pty(void)
 		ioctl(term.ptyfd, TIOCSWINSZ, &ws);
 }
 
-/** 
- * @brief resize window framebuffer to reflect resized size
- */
+/* resize window framebuffer to reflect resized size */
 static int resize_window(int w, int h)
 {
 	if (w < 1)
@@ -267,8 +247,7 @@ static int resize_window(int w, int h)
 	return 0;
 }
 
-/** TODO
- */
+/* TODO */
 static void resize_terminal(int w, int h)
 {
 	int cols = w / font.cellw;
@@ -288,9 +267,7 @@ static void resize_terminal(int w, int h)
 	resize_pty();
 }
 
-/**
- * @brief program event loop (TODO)
- */
+/* event loop (TODO) */
 static void run(void)
 {
 	MausEvent ev;
@@ -393,9 +370,7 @@ static void run(void)
 	}
 }
 
-/**
- * @brief wait for activity while allowing window events
- */
+/* wait for activity while allowing window events */
 static void wait_events(void)
 {
 	struct pollfd pfd = {

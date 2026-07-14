@@ -3,13 +3,15 @@
 
 #include "utils.h"
 
-/* TODO: stdarg */
+/* perror `msg` and exit program with `ec`
+   TODO? stdarg */
 void die(int ec, const char* msg)
 {
 	perror(msg);
 	exit(ec);
 }
 
+/* pack r, g, b and a into u32 */
 uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
 	return
@@ -19,6 +21,7 @@ uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 		((uint32_t)b);
 }
 
+/* malloc, die on failure */
 void* xmalloc(size_t len)
 {
 	void* p = malloc(len);
