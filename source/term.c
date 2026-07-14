@@ -5,6 +5,7 @@
 
 #include <grapheme.h>
 
+#include "config.h"
 #include "term.h"
 #include "utils.h"
 
@@ -25,13 +26,6 @@ static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
 static void utf8_flush(Term* t, Caret* c);
 static void utf8_putc(Term* t, Caret* c, unsigned char ch);
-
-static const uint32_t ansi_colours[16] = {
-	0xff000000, 0xffcd0000, 0xff00cd00, 0xffcdcd00,
-	0xff0000ee, 0xffcd00cd, 0xff00cdcd, 0xffe5e5e5,
-	0xff7f7f7f, 0xffff0000, 0xff00ff00, 0xffffff00,
-	0xff5c5cff, 0xffff00ff, 0xff00ffff, 0xffffffff,
-};
 
 /** TODO
  */
@@ -450,8 +444,8 @@ static void sgr(Term* t)
 		int p = t->csi_params[i];
 
 		if (p == 0) {
-			t->fg = TERM_DEFAULT_FG;
-			t->bg = TERM_DEFAULT_BG;
+			t->fg = default_fg;
+			t->bg = default_bg;
 			t->attr = 0;
 		}
 		else if (p == 7)
@@ -459,17 +453,17 @@ static void sgr(Term* t)
 		else if (p == 27)
 			t->attr &= ~TERM_ATTR_REVERSE; /* turn off reverse attribute bit */
 		else if (p >= 30 && p <= 37)
-			t->fg = ansi_colours[p - 30];
+			t->fg = color_table[p - 30];
 		else if (p >= 40 && p <= 47)
-			t->bg = ansi_colours[p - 40];
+			t->bg = color_table[p - 40];
 		else if (p >= 90 && p <= 97)
-			t->fg = ansi_colours[p - 90 + 8];
+			t->fg = color_table[p - 90 + 8];
 		else if (p >= 100 && p <= 107)
-			t->bg = ansi_colours[p - 100 + 8];
+			t->bg = color_table[p - 100 + 8];
 		else if (p == 39)
-			t->fg = TERM_DEFAULT_FG;
+			t->fg = default_fg;
 		else if (p == 49)
-			t->bg = TERM_DEFAULT_BG;
+			t->bg = default_bg;
 		else if ((p == 38 || p == 48) &&
 		         i + 4 <= t->csi_idx && t->csi_params[i + 1] == 2) {
 			uint32_t col = rgba(

@@ -45,8 +45,8 @@ static Term term = {
 	.rows = 0,
 	.ptyfd = -1,
 	.ptypid = -1,
-	.fg = TERM_DEFAULT_FG,
-	.bg = TERM_DEFAULT_BG,
+	.fg = default_fg,
+	.bg = default_bg,
 	.cursor_visible = true,
 };
 
@@ -321,8 +321,13 @@ static void run(void)
 				bool cursor = term.cursor_visible &&
 				              x == car.x && y == car.y;
 				bool reverse = (r->attr & TERM_ATTR_REVERSE) != 0;
-				uint32_t fg = (cursor != reverse) ? r->bg : r->fg;
-				uint32_t bg = (cursor != reverse) ? r->fg : r->bg;
+				uint32_t fg = reverse ? r->bg : r->fg;
+				uint32_t bg = reverse ? r->fg : r->bg;
+
+				if (cursor) {
+					fg = cursor_fg;
+					bg = cursor_bg;
+				}
 
 				if (!r->dmg)
 					continue;
