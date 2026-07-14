@@ -7,5 +7,5 @@ platform.mk
 *.ttf
 *.bdf
 *.tar
-./config.h
+config.h
 
