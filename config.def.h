@@ -45,3 +45,4 @@ static const uint32_t color_table[16] = {
 };
 
 #endif /* CONFIG_H */
+
