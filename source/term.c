@@ -26,11 +26,11 @@ static void sgr(Term* t);
 static void utf8_flush(Term* t, Caret* c);
 static void utf8_putc(Term* t, Caret* c, unsigned char ch);
 
-static const uint32_t ansi_colours[16] = { /* TODO */
-	0xff000000, 0xff0000cd, 0xff00cd00, 0xff00cdcd,
-	0xffee0000, 0xffcd00cd, 0xffcdcd00, 0xffe5e5e5,
-	0xff7f7f7f, 0xff0000ff, 0xff00ff00, 0xff00ffff,
-	0xffff5c5c, 0xffff00ff, 0xffffff00, 0xffffffff,
+static const uint32_t ansi_colours[16] = {
+	0xff000000, 0xffcd0000, 0xff00cd00, 0xffcdcd00,
+	0xff0000ee, 0xffcd00cd, 0xff00cdcd, 0xffe5e5e5,
+	0xff7f7f7f, 0xffff0000, 0xff00ff00, 0xffffff00,
+	0xff5c5cff, 0xffff00ff, 0xff00ffff, 0xffffffff,
 };
 
 /** TODO
@@ -851,4 +851,3 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 
 	return damaged;
 }
-
