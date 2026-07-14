@@ -1,26 +1,24 @@
 CC = cc
 CFLAGS = -std=c99 -Wall -Wextra
 CPPFLAGS = -Iinclude -Ilibmaus/include
-
-LDFLAGS = -lgrapheme
+LDFLAGS =
+LDLIBS = -lgrapheme
 
 include platform.mk
 
 SRCS = source/cterm.c \
-       source/utils.c  \
-       source/font.c  \
-       source/term.c  \
-       source/draw.c  \
-       libmaus/source/maus.c     \
-       libmaus/source/maus_x11.c \
-       libmaus/source/utils.c
+       source/utils.c \
+       source/font.c \
+       source/term.c \
+       source/draw.c
+
 OUT = cterm
 
 all:
-	${CC} ${SRCS} ${CFLAGS} -O2 ${CPPFLAGS} ${LDFLAGS} -o ${OUT}
+	${CC} ${CFLAGS} -Os ${CPPFLAGS} ${SRCS} ${LDFLAGS} -o ${OUT} ${LDLIBS}
 
 debug:
-	${CC} ${SRCS} ${CFLAGS} -g ${CPPFLAGS} ${LDFLAGS} -o ${OUT}
+	${CC} ${CFLAGS} -g  ${CPPFLAGS} ${SRCS} ${LDFLAGS} -o ${OUT} ${LDLIBS}
 
 clean:
 	rm -f ${OUT}
@@ -28,4 +26,6 @@ clean:
 compile_flags:
 	rm -f compile_flags.txt
 	for f in ${CPPFLAGS} ${CFLAGS}; do echo $$f >> compile_flags.txt; done
+
+.PHONY: all debug clean compile_flags
 

@@ -1,51 +1,64 @@
 #!/bin/sh
+set -eu
 
-PLATFORM=$(uname)
+PLATFORM=$(uname -s)
+CPPFLAGS=
+LDFLAGS="-Llibmaus/build"
 
-if [ -n "$WAYLAND_DISPLAY" ]; then
-	UNIX_BACKEND=-DBACKEND_WAY
-elif [ -n "$DISPLAY" ]; then
-	UNIX_BACKEND=-DBACKEND_X11
-else
-	echo "Neither Xorg or Wayland detected! Aborting..." >&2
-	exit 1
-fi
+case "$PLATFORM" in
+	Darwin)
+		BACKEND=mac
+		LDLIBS="-lmaus_mac \
+		        -framework Cocoa \
+		        -framework CoreVideo \
+		        -framework IOKit \
+		        -framework CoreGraphics \
+		        -framework CoreFoundation \
+		        -framework Carbon"
+		;;
 
-LINUX_LDFLAGS="-lX11 -lXext"
-LINUX_CPPFLAGS="-D_XOPEN_SOURCE=700 $UNIX_BACKEND"
-
-FREEBSD_LDFLAGS="-lX11 -lXext"
-FREEBSD_CPPFLAGS="$UNIX_BACKEND"
-
-OPENBSD_LDFLAGS="-I/usr/X11R6/include -L/usr/X11R6/lib -lX11 -lXext"
-OPENBSD_CPPFLAGS="$UNIX_BACKEND"
-
-MACOS_LDFLAGS="-framework Cocoa -framework CoreVideo -framework IOKit -framework CoreGraphics -framework CoreFoundation -framework Carbon"
-
-{
-	case "$PLATFORM" in
-		Linux)
-			echo "# Linux"
-			echo "LDFLAGS += $LINUX_LDFLAGS"
-			echo "CPPFLAGS += $LINUX_CPPFLAGS"
-			;;
-		FreeBSD)
-			echo "# FreeBSD"
-			echo "LDFLAGS += $FREEBSD_LDFLAGS"
-			echo "CPPFLAGS += $FREEBSD_CPPFLAGS"
-			;;
-		OpenBSD)
-			echo "# OpenBSD"
-			echo "LDFLAGS += $OPENBSD_LDFLAGS"
-			echo "CPPFLAGS += $OPENBSD_CPPFLAGS"
-			;;
-		Darwin)
-			echo "# Darwin"
-			echo "LDFLAGS += $MACOS_LDFLAGS"
-			;;
-		*) # TODO: some better default option
-			echo "Unsupported platform: $PLATFORM" >&2
+	Linux|FreeBSD|OpenBSD)
+		if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+			BACKEND=way
+			CPPFLAGS=-DBACKEND_WAY
+			LDLIBS="-lmaus_way -lwayland-client"
+		elif [ -n "${DISPLAY:-}" ]; then
+			BACKEND=x11
+			CPPFLAGS=-DBACKEND_X11
+			LDLIBS="-lmaus_x11 -lX11 -lXext"
+		else
+			echo "No X11 or Wayland display found" >&2
 			exit 1
-			;;
-	esac
-} > platform.mk
+		fi
+
+		case "$PLATFORM" in
+			Linux)
+				CPPFLAGS="-D_XOPEN_SOURCE=700 $CPPFLAGS"
+				;;
+			OpenBSD)
+				CPPFLAGS="-I/usr/X11R6/include $CPPFLAGS"
+				LDFLAGS="-L/usr/X11R6/lib $LDFLAGS"
+				;;
+		esac
+		;;
+
+	*)
+		echo "Unsupported platform: $PLATFORM" >&2
+		exit 1
+		;;
+esac
+
+(
+	cd libmaus
+	rm -rf build/
+	./configure --backend="$BACKEND"
+	make
+)
+
+cat >platform.mk <<EOF
+CPPFLAGS += $CPPFLAGS
+LDFLAGS += $LDFLAGS
+LDLIBS += $LDLIBS
+EOF
+
+echo "Configuration done"
