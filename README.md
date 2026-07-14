@@ -1,6 +1,13 @@
 ![](logo.png)  
 Is a tiny, cross-platform terminal emulator (written in C).
 
+### Building:
+``` sh
+./configure
+make
+cp cterm /usr/local/bin # or where you want it
+```
+
 ### About
 cterm is a tiny terminal emulator I built from frustrations of not being able
 to use [st](https://st.suckless.org/) across different platforms. Much like
@@ -22,10 +29,5 @@ no problem with adding other formats but no vector font support! If you want to
 convert your vector font, you can use something like `otf2bdf` (thats what I
 do!).
 
-### Building:
-``` sh
-./configure
-make
-cp cterm /usr/local/bin # or where you want it
-```
+Reloading the font can be done with `AltR + r`
 

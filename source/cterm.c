@@ -1,3 +1,4 @@
+#include "maus_input.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
@@ -23,10 +24,11 @@
 #include "utils.h"
 
 static void cleanup(void);
-static void handle_key(const MausEvent* ev);
+static bool handle_key(const MausEvent* ev);
 static void init(void);
 static bool ptyread(void);
 static void ptywrite(const char* s, size_t n);
+static bool reload_font(void);
 static void resize_pty(void);
 static int resize_window(int w, int h);
 static void resize_terminal(int w, int h);
@@ -70,12 +72,17 @@ static void cleanup(void)
  *
  * @param c character check dispatch
  */
-static void handle_key(const MausEvent* ev)
+static bool handle_key(const MausEvent* ev)
 {
 	char text;
 
 	if (ev->type != MAUS_EV_KEY || !ev->key.pressed)
-		return;
+		return false;
+
+	if (win->key_syms[MAUS_KEY_ALT_R] &&
+	   (ev->key.key == MAUS_KEY_R ||
+	    ev->key.key[MAUS_KEY_R_UP]))
+		return reload_font();
 
 	switch(ev->key.key) {
 	case MAUS_KEY_ENTER:
@@ -99,6 +106,8 @@ static void handle_key(const MausEvent* ev)
 			ptywrite(&text, 1);
 		break;
 	}
+
+	return false;
 }
 
 /**
@@ -205,6 +214,22 @@ static void ptywrite(const char* s, size_t n)
 	}
 }
 
+/* reload the font. true on success, false on failure.
+   in event of failure, current font will still be in use  */
+static bool reload_font(void)
+{
+	Fontface next;
+	if (font_load(&next, font_path) < 0)
+		return false;
+
+	font_free(&font);
+	font = next;
+	resize_terminal(winw, winh);
+	term_damage_all(&term);
+
+	return true;
+}
+
 /** 
  * @brief resize pty to reflect window size
  */
@@ -291,8 +316,10 @@ static void run(void)
 				continue;
 			}
 
-
-			handle_key(&ev);
+			if (handle_key(&ev)) {
+				dirty = true;
+				redraw_all = true;
+			}
 		}
 
 		if (!running)
