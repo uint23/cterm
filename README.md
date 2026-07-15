@@ -1,6 +1,11 @@
 ![](logo.png)  
 Is a tiny, cross-platform terminal emulator (written in C).
 
+#### Note
+macOS and Wayland won't build as libmaus doesn't have implementations for
+those. If you would be interested in making one for your own platform, it would
+be amazing if you could contribute!
+
 ### Building:
 ``` sh
 ./configure
