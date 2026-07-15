@@ -27,6 +27,7 @@ cterm also doesn't rely on any extra dependancies like
 [FreeType](https://freetype.org/). Well it sort of does, but I chose to vendor
 libmaus as that is a really simple windowing library I created so that it can
 be cross platform.
+> !! This is a lie, cterm as of now depends on libgrapheme !!
 
 ### Info
 Only BDF fonts are supported as for now. If requested (or contributed), I have
