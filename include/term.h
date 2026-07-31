@@ -61,8 +61,6 @@ typedef struct {
 	bool    bracketed_paste;
 	int     csi_params[CSI_PARAMS_MAX];
 	int     csi_idx;
-	char    utf8[4];
-	size_t  utf8_len;
 } Term;
 
 /* clear screen by filling runes with ' ' and reseting
@@ -86,7 +84,7 @@ int term_resize(Term* t, Caret* c, int cols, int rows);
 /* scroll viewport up by one */
 void term_scroll(Term* t);
 
-/* processes terminal input, parse utf8, escape sequences, update
+/* processes terminal input, parse escape sequences, update
    caret, screen state, and damage status. */
 bool term_write(Term* t, Caret* c, const char* s, size_t n);
 

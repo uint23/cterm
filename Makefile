@@ -2,7 +2,6 @@ CC = cc
 CFLAGS = -std=c99 -Wall -Wextra
 CPPFLAGS = -Iinclude -Ilibmaus/include
 LDFLAGS =
-LDLIBS = -lgrapheme
 
 include platform.mk
 

@@ -1,9 +1,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
-
-#include <grapheme.h>
 
 #include "../config.h"
 #include "term.h"
@@ -16,7 +13,6 @@ static void chars_delete(Term* t, Caret* c, int n);
 static uint32_t acs_map(unsigned char ch);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
 static void csi_reset(Term* t);
-static int cp_width(uint32_t cp);
 static void erase_display(Term* t, Caret* c);
 static void erase_line(Term* t, Caret* c);
 static void reset_rune(Term* t, int x, int y);
@@ -24,8 +20,6 @@ static void rune_prepare(Term* t, int x, int y);
 static void scroll_down(Term* t, int top, int bot, int n);
 static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
-static void utf8_flush(Term* t, Caret* c);
-static void utf8_putc(Term* t, Caret* c, unsigned char ch);
 
 /* TODO */
 static uint32_t acs_map(unsigned char ch)
@@ -306,18 +300,6 @@ static void csi_reset(Term* t)
 }
 
 /* TODO */
-static int cp_width(uint32_t cp)
-{
-	int w = wcwidth((wchar_t)cp);
-
-	if (w < 0)
-		return 1;
-	if (w > 2)
-		return 2;
-	return w;
-}
-
-/* TODO */
 static void erase_display(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
@@ -464,49 +446,6 @@ static void sgr(Term* t)
 	}
 }
 
-/* TODO */
-static void utf8_flush(Term* t, Caret* c)
-{
-	if (t->utf8_len == 0)
-		return;
-	term_putc(t, c, GRAPHEME_INVALID_CODEPOINT);
-	t->utf8_len = 0;
-}
-
-/* buffer and decode utf8 to code points, then write
-   using current character set */
-static void utf8_putc(Term* t, Caret* c, unsigned char ch)
-{
-	uint_least32_t cp;
-	size_t ret;
-
-	if (ch < 0x80) {
-		utf8_flush(t, c);
-		term_putc(t, c, t->acs[t->charset] ? acs_map(ch) : ch);
-		return;
-	}
-
-	if (t->utf8_len == sizeof(t->utf8))
-		utf8_flush(t, c);
-
-	t->utf8[t->utf8_len++] = (char)ch;
-	for (;;) {
-		ret = grapheme_decode_utf8(t->utf8, t->utf8_len, &cp);
-		if (ret > t->utf8_len)
-			return;
-		if (ret == 0) {
-			t->utf8_len = 0;
-			return;
-		}
-
-		term_putc(t, c, (uint32_t)cp);
-		t->utf8_len -= ret;
-		if (t->utf8_len == 0)
-			return;
-		memmove(t->utf8, t->utf8 + ret, t->utf8_len);
-	}
-}
-
 void term_clear(Term* t, Caret* c)
 {
 	for (int y = 0; y < t->rows; y++) {
@@ -570,48 +509,30 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 			term_putc(t, c, '\n');
 		break;
 	default: {
-		int w;
-
 		if (cp < 32)
 			break;
-		w = cp_width(cp);
-		if (w == 0)
-			break;
-		if (w == 2 && t->cols < 2)
-			w = 1;
 
 		if (t->wrapnext) {
 			term_putc(t, c, '\n');
 			t->wrapnext = false;
 		}
-		if (w == 2 && c->x == t->cols - 1)
-			term_putc(t, c, '\n');
 
 		rune_prepare(t, c->x, c->y);
 		Rune* r = &RUNE(t, c->x, c->y);
 		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg ||
-		    r->attr != t->attr || r->width != w) {
+		    r->attr != t->attr || r->width != 1) {
 			r->cp = cp;
 			r->fg = t->fg;
 			r->bg = t->bg;
 			r->attr = t->attr;
-			r->width = w;
+			r->width = 1;
 			r->dmg = true;
 		}
-		if (w == 2) {
-			Rune* spacer = &RUNE(t, c->x + 1, c->y);
-			spacer->cp = ' ';
-			spacer->fg = t->fg;
-			spacer->bg = t->bg;
-			spacer->attr = t->attr;
-			spacer->width = 0;
-			spacer->dmg = true;
-		}
 
-		if (c->x + w >= t->cols)
+		if (c->x + 1 >= t->cols)
 			t->wrapnext = true;
 		else
-			c->x += w;
+			c->x++;
 
 		break;
 	}
@@ -708,7 +629,6 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 		switch (t->state) {
 		case TSTATE_NORMAL:
 			if (ch == '\x1B') {
-				utf8_flush(t, c);
 				t->state = TSTATE_ESC;
 			}
 			else if (ch == '\x0E') {
@@ -717,8 +637,11 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			else if (ch == '\x0F') {
 				t->charset = 0;
 			}
+			else if (ch >= 0x80) {
+				/* utf8 unsupported . ignore high bit bytes */
+			}
 			else {
-				utf8_putc(t, c, ch);
+				term_putc(t, c, t->acs[t->charset] ? acs_map(ch) : ch);
 			}
 			break;
 
