@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #ifdef __linux__
@@ -73,10 +74,30 @@ static bool handle_key(const MausEvent* ev)
 	if (ev->type != MAUS_EV_KEY || !ev->key.pressed)
 		return false;
 
-	if (win->key_syms[MAUS_KEY_ALT_R] &&
-	   (ev->key.key == MAUS_KEY_R ||
-	    ev->key.key == MAUS_KEY_R_UP))
+	if (BIND_RELOAD_FONT)
 		return reload_font();
+
+	if (BIND_PASTE) {
+		char* text = maus_clipboard_get_text(win);
+
+		if (text && text[0] != '\0') {
+			/* bracketed paste mode on */
+			if (term.bracketed_paste)
+				ptywrite("\033[200~", 6);
+
+			for (char* p = text; *p; p++) {
+				/* replace newlines with carriage returns */
+				char ch = (*p == '\n') ? '\r' : *p;
+				ptywrite(&ch, 1);
+			}
+
+			/* bracketed paste mode off */
+			if (term.bracketed_paste)
+				ptywrite("\033[201~", 6);
+		}
+
+		return true;
+	}
 
 	switch(ev->key.key) {
 	case MAUS_KEY_ENTER:
@@ -323,6 +344,7 @@ static void run(void)
 
 		if (redraw_all) {
 			draw_clear(win->bfb, win->stride, winh, rgba(0, 0, 0, 255));
+			term_damage_all(&term);
 		}
 
 		for (int y = 0; y < term.rows; y++) {

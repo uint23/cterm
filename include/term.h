@@ -58,6 +58,7 @@ typedef struct {
 	int     charset_target;
 	bool    wrapnext;
 	bool    cursor_visible;
+	bool    bracketed_paste;
 	int     csi_params[CSI_PARAMS_MAX];
 	int     csi_idx;
 	char    utf8[4];

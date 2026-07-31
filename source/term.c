@@ -255,6 +255,8 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 			int p = t->csi_params[i];
 			if (p == 25)
 				t->cursor_visible = on;
+			if (p == 2004)
+				t->bracketed_paste = on;
 			if (p == 1048) {
 				if (on)
 					t->saved = *c;

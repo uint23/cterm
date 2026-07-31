@@ -9,7 +9,7 @@ static const char font_path[] = "monospace.bdf";
 
 static const int   win_width = 80;  /* in columns */
 static const int   win_height = 24; /* in rows */
-static const char win_title[] = "cterm";
+static const char  win_title[] = "cterm";
 static const int   win_fps = 60;
 
 static const int   pad_x = 8;
@@ -17,6 +17,19 @@ static const int   pad_y = 8;
 
 static const char* const shell = NULL; /* NULL uses $SHELL */
 static const char term_name[] = "vt100";
+
+#define CTRL_DOWN  (win->key_syms[MAUS_KEY_CONTROL_L] || win->key_syms[MAUS_KEY_CONTROL_R])
+#define SHIFT_DOWN (win->key_syms[MAUS_KEY_SHIFT_L] || win->key_syms[MAUS_KEY_SHIFT_R])
+
+#define BIND_COPY  (CTRL_DOWN && SHIFT_DOWN && \
+                   (ev->key.key == MAUS_KEY_C || ev->key.key == MAUS_KEY_C_UP))
+
+#define BIND_PASTE (CTRL_DOWN && SHIFT_DOWN && \
+                   (ev->key.key == MAUS_KEY_V || ev->key.key == MAUS_KEY_V_UP))
+
+#define BIND_RELOAD_FONT (win->key_syms[MAUS_KEY_ALT_R] && \
+                         (ev->key.key == MAUS_KEY_R ||     \
+                         ev->key.key == MAUS_KEY_R_UP))
 
 /* AARRGGBB */
 static const uint32_t default_fg = 0xffffffff;
