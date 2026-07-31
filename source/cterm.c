@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <time.h>
 #ifdef __linux__
 #include <pty.h>
@@ -34,6 +35,7 @@ static void resize_pty(void);
 static int resize_window(int w, int h);
 static void resize_terminal(int w, int h);
 static void run(void);
+static bool shell_exited(void);
 static void wait_events(void);
 
 static Fontface font;
@@ -299,7 +301,7 @@ static void run(void)
 
 	while (running) {
 		while (maus_event_poll(win, &ev)) {
-			if (ev.type == MAUS_EV_CLOSE) {
+			if (ev.type == MAUS_EV_CLOSE || shell_exited()) {
 				running = false;
 				break;
 			}
@@ -390,6 +392,16 @@ static void run(void)
 		dirty = false;
 		redraw_all = false;
 	}
+}
+
+/* check if the shell has exited */
+static bool shell_exited(void)
+{
+	int status;
+
+	if (term.ptypid <= 0)
+		return true;
+	return waitpid(term.ptypid, &status, WNOHANG) == term.ptypid;
 }
 
 /* wait for activity while allowing window events */
