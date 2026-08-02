@@ -449,15 +449,8 @@ static void sgr(Term* t)
 void term_clear(Term* t, Caret* c)
 {
 	for (int y = 0; y < t->rows; y++) {
-		for (int x = 0; x < t->cols; x++) {
-			Rune* rune = &RUNE(t, x, y);
-			rune->cp = ' ';
-			rune->fg = t->fg;
-			rune->bg = t->bg;
-			rune->attr = t->attr;
-			rune->width = 1;
-			rune->dmg = true;
-		}
+		for (int x = 0; x < t->cols; x++)
+			reset_rune(t, x, y);
 	}
 
 	c->x = 0;
@@ -736,13 +729,6 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 
 		if (old.x != c->x || old.y != c->y)
 			damaged = true;
-	}
-
-	for (int y = 0; y < t->rows; y++) {
-		for (int x = 0; x < t->cols; x++) {
-			if (RUNE(t, x, y).dmg)
-				return true;
-		}
 	}
 
 	return damaged;

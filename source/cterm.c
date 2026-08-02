@@ -321,10 +321,8 @@ static void run(void)
 				continue;
 			}
 
-			if (handle_key(&ev)) {
+			if (handle_key(&ev))
 				dirty = true;
-				redraw_all = true;
-			}
 		}
 
 		if (!running)
