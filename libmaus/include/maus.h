@@ -1,7 +1,6 @@
 #ifndef MAUSWIN_H
 #define MAUSWIN_H
 
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 
@@ -36,7 +35,7 @@
 	#include "maus_x11.h"
 
 #elif defined(BACKEND_WAY)
-	/* ... */
+	#include "maus_wayland.h"
 
 #elif defined(BACKEND_WIN)
 	#include "maus_win.h"
@@ -53,7 +52,7 @@
 	 ((uint32_t)(c).r << 16) | \
 	 ((uint32_t)(c).g <<  8) | \
 	 ((uint32_t)(c).b))
-/* ... */
+
 #define MAUS_PIXEL_AT(mw, x, y) ((mw)->bfb[(y) * (mw)->stride + (x)])
 
 typedef enum {
@@ -63,66 +62,66 @@ typedef enum {
 	MAUS_EV_MOUSE_BUTTON,
 	MAUS_EV_MOUSE_MOTION,
 	MAUS_EV_RESIZE,
-	MAUS_EV_REDRAW, /* TODO: MAUS_EV_REDRAW for windows */
+	MAUS_EV_REDRAW /* TODO: MAUS_EV_REDRAW for windows */
 } MausEventType;
 
 typedef struct {
-	uint8_t        a;
-	uint8_t        r;
-	uint8_t        g;
-	uint8_t        b;
+	uint8_t a;
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
 } MausColor;
 
 typedef struct {
 	MausEventType type;
 
-	union {
+	struct {
+		uint32_t code; /* raw, backend keycode */
+		MausKey  key;  /* logical, mapped key */
+		char     text; /* translated text from key */
+		int8_t     pressed;
+	} key;
+
+	struct {
 		struct {
-			uint32_t  code; /* raw, backend keycode */
-			MausKey   key;  /* logical, mapped key */
-			char      text; /* translated text from key */
-			bool      pressed;
-		} key;
+			MausMouseButton button;
+			int8_t            pressed;
+		} button;
 
 		struct {
-			struct {
-				MausMouseButton button;
-				bool            pressed;
-			} button;
+			int32_t x;
+			int32_t y;
+			int32_t dx;
+			int32_t dy;
+		} motion;
+	} mouse;
 
-			struct {
-				int32_t  x;
-				int32_t  y;
-			} motion;
-		} mouse;
-
-		struct {
-			uint32_t width;
-			uint32_t height;
-		} resize;
-	};
+	struct {
+		uint32_t width;
+		uint32_t height;
+	} resize;
 } MausEvent;
 
 typedef struct {
-	MausBackend    backend;
-	uint64_t       frame_time_last;
-	char*          clipboard;
+	MausBackend backend;
+	uint64_t    frame_time_last;
+	char*       clipboard;
 
-	uint32_t*      fb;  /* front frame buffer */
-	uint32_t*      bfb; /* back frame buffer */
-	uint32_t       stride;
+	uint32_t* fb;  /* front frame buffer */
+	uint32_t* bfb; /* back frame buffer */
+	uint32_t  stride;
 
-	const char*    title;
-	uint32_t       width;
-	uint32_t       height;
-	int32_t        x;
-	int32_t        y;
+	const char* title;
+	uint32_t    width;
+	uint32_t    height;
+	int32_t     x;
+	int32_t     y;
 
-	bool           key_codes[MAUS_KEYCODE_LAST]; /* physical keys */
-	bool           key_syms[MAUS_KEY_LAST];      /* logical keys */
+	int8_t key_codes[MAUS_KEYCODE_LAST]; /* physical keys */
+	int8_t key_syms[MAUS_KEY_LAST];      /* logical keys */
 
-	MausCursor     cursor;
-	bool           mouse_buttons[MAUS_MOUSE_BUTTON_LAST];
+	MausCursor cursor;
+	int8_t       mouse_buttons[MAUS_MOUSE_BUTTON_LAST];
 } Maus;
 
 /* clear screen with color: `col` */
@@ -134,14 +133,15 @@ void maus_clipboard_set_text(Maus* mw, const char* text);
 /* get text from system clipboard */
 char* maus_clipboard_get_text(Maus* mw);
 
-/* close a Maus. returns false on fail */
+/* close a Maus. returns 0 on fail
+   TODO also free mw */
 void maus_close(Maus* mw);
 
-/* close a window without the whole Maus. returns false on fail */
-bool maus_close_window(Maus* mw);
+/* close a window without the whole Maus. returns 0 on fail */
+int8_t maus_close_window(Maus* mw);
 
-/* create window from Maus. returns false on fail */
-bool maus_create_window(Maus* mw);
+/* create window from Maus. returns 0 on fail */
+int8_t maus_create_window(Maus* mw);
 
 /* log message to output `fd` and die */
 void maus_die(const char* fmt, ...);
@@ -156,20 +156,20 @@ Maus* maus_init(const char* title, int x, int y, int width, int height);
 void maus_log(FILE* fd, const char* fmt, ...);
 
 /* poll for events then fill `ev` with retrieved events.
-   returns true if event polled, else false.
+   returns 1 if event polled, else 0.
    note: can burn cpu cycles */
-bool maus_event_poll(Maus* mw, MausEvent* ev);
+int8_t maus_event_poll(Maus* mw, MausEvent* ev);
 
-/* poll for events then fill `ev` with retrieved events. returns true if event
-   polled, else false. note, thread goes to sleep until an event arrives */
+/* poll for events then fill `ev` with retrieved events. returns 1 if event
+   polled, else 0. note, thread goes to sleep until an event arrives */
 void maus_event_wait(Maus* mw, MausEvent* ev);
 
 /* present the pixelbuffer to the screen */
 void maus_present(Maus* mw);
 
-/* resize window to specified width and height. returns true on resize success,
-   else false */
-bool maus_resize(Maus* mw, uint32_t width, uint32_t height);
+/* resize window to specified width and height. returns 1 on resize success,
+   else 0 */
+int8_t maus_resize(Maus* mw, uint32_t width, uint32_t height);
 
 /* cap framerate to targetted fps */
 void maus_target_fps(Maus* mw, uint32_t fps);

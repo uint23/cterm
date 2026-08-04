@@ -1,4 +1,9 @@
 Maus:
+[ ] Relative cursor
+	[ ] Fill deltas
+[ ] Rename mw->ctx internally
+[ ] Move framebuffer creation out
+    of maus_init on platforms
 [?] Cursor warping
 [?] Custom cursor
 

@@ -8,12 +8,14 @@
 int mx, my;
 bool cur_visible = true;
 bool cur_locked = false;
+bool cur_relative = false;
 bool mb1_pressed = false;
 char txtbuf[4096] = {'\0'};
 int current_char = 0;
 bool resize = false;
 int rszw;
 int rszh;
+MausColor white = {255, 255, 255, 255};
 
 void handle_ev(Maus* mw, MausEvent* ev)
 {
@@ -25,7 +27,7 @@ void handle_ev(Maus* mw, MausEvent* ev)
 		case MAUS_EV_KEY: {
 			(void)0;
 
-			bool* keys = mw->key_syms;
+			int8_t* keys = mw->key_syms;
 			if (keys[MAUS_KEY_CONTROL_L] && keys[MAUS_KEY_Q]) {
 				maus_close(mw);
 				exit(EXIT_SUCCESS);
@@ -44,6 +46,13 @@ void handle_ev(Maus* mw, MausEvent* ev)
 
 				cur_locked = !cur_locked;
 			}
+			if (keys[MAUS_KEY_CONTROL_L] && keys[MAUS_KEY_R]) {
+				cur_relative ?
+				maus_cur_set_mode(mw, MAUS_CURSOR_STATE_ABSOLUTE) :
+				maus_cur_set_mode(mw, MAUS_CURSOR_STATE_RELATIVE);
+
+				cur_relative = !cur_relative;
+			}
 
 			if (ev->key.pressed == false)
 				break;
@@ -59,6 +68,16 @@ void handle_ev(Maus* mw, MausEvent* ev)
 			break;
 		}
 		case MAUS_EV_MOUSE_BUTTON: {
+			if (ev->mouse.button.button == MAUS_MOUSE_BUTTON_SCROLL_UP) {
+				white.r += 5;
+				white.g += 5;
+				white.b += 5;
+			}
+			else if (ev->mouse.button.button == MAUS_MOUSE_BUTTON_SCROLL_DOWN) {
+				white.r -= 5;
+				white.g -= 5;
+				white.b -= 5;
+			}
 			mb1_pressed =
 			mw->mouse_buttons[MAUS_MOUSE_BUTTON_LEFT] ?
 			true : false;
@@ -74,6 +93,8 @@ void handle_ev(Maus* mw, MausEvent* ev)
 			rszw = ev->resize.width;
 			rszh = ev->resize.height;
 		} break;
+		case MAUS_EV_REDRAW:
+			break;
 		case MAUS_EV_NONE:
 			break;
 	}
@@ -102,7 +123,7 @@ int main(void)
 			resize = false;
 		}
 
-		maus_clear(mw, MAUS_COL_RGBA(255, 255, 255, 255));
+		maus_clear(mw, white);
 
 		uint32_t red_unpacked = MAUS_UNPACK_COL(red);
 		if (mx >= 0 && my >= 0 &&
@@ -132,4 +153,3 @@ int main(void)
 	maus_font_free(font);
 	maus_close(mw);
 }
-

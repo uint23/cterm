@@ -5,11 +5,13 @@
 
 char* maus_strdup(const char* src)
 {
+	size_t len;
+	char* dst;
 	if (src == NULL)
 		return NULL;
 
-	size_t len = strlen(src);
-	char* dst = malloc(len + 1);
+	len = strlen(src);
+	dst = malloc(len + 1);
 	if (dst == NULL)
 		return NULL;
 

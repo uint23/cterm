@@ -22,6 +22,7 @@ static void vlog(FILE* fd, const char* fmt, va_list ap)
 void maus_die(const char* fmt, ...)
 {
 	va_list ap;
+
 	va_start(ap, fmt);
 	vlog(stderr, fmt, ap);
 	va_end(ap);
@@ -34,25 +35,29 @@ uint64_t maus_get_time_ns(void)
 #if !defined(_WIN32)
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+	return ts.tv_sec * 1000000000 + ts.tv_nsec;
 #else
 	static LARGE_INTEGER frequency = {0};
+	LARGE_INTEGER counter;
+	uint64_t sec;
+	uint64_t rem;
+
 	if (frequency.QuadPart == 0)
 		QueryPerformanceFrequency(&frequency);
 
-	LARGE_INTEGER counter;
 	QueryPerformanceCounter(&counter);
 
-	uint64_t sec = counter.QuadPart / frequency.QuadPart;
-	uint64_t rem = counter.QuadPart % frequency.QuadPart;
+	sec = counter.QuadPart / frequency.QuadPart;
+	rem = counter.QuadPart % frequency.QuadPart;
 
-	return (sec * 1000000000ULL) + ((rem * 1000000000ULL) / frequency.QuadPart);
+	return (sec * 1000000000) + ((rem * 1000000000) / frequency.QuadPart);
 #endif
 }
 
 void maus_log(FILE* fd, const char* fmt, ...)
 {
 	va_list ap;
+
 	va_start(ap, fmt);
 	vlog(fd, fmt, ap);
 	fputc('\n', fd);
@@ -61,24 +66,32 @@ void maus_log(FILE* fd, const char* fmt, ...)
 
 void maus_target_fps(Maus* mw, uint32_t fps)
 {
+	uint64_t ns_frame;
+	uint64_t cur_time;
+	uint64_t elapsed;
+	uint64_t sleep;
+
+	#if !defined(_WIN32)
+	struct timespec ts;
+	#endif
+
 	if (fps == 0)
 		return;
 
-	uint64_t ns_frame = 1000000000ULL / fps; /* max ns a frame can take */
-	uint64_t cur_time = maus_get_time_ns();
-	uint64_t elapsed = cur_time - mw->frame_time_last;
+	ns_frame = 1000000000 / fps; /* max ns a frame can take */
+	cur_time = maus_get_time_ns();
+	elapsed = cur_time - mw->frame_time_last;
 
 	/* if early finish, sleep for the remaining time balance */
 	if (elapsed < ns_frame) {
-		uint64_t sleep = ns_frame - elapsed;
+		sleep = ns_frame - elapsed;
 	#if !defined(_WIN32)
-		struct timespec ts;
-		ts.tv_sec = sleep / 1000000000ULL;
-		ts.tv_nsec = sleep % 1000000000ULL;
+		ts.tv_sec = sleep / 1000000000;
+		ts.tv_nsec = sleep % 1000000000;
 		nanosleep(&ts, NULL);
-	#else /* unix */
-		Sleep((DWORD)((sleep + 999999ULL) / 1000000ULL));
-	#endif /* platform */
+	#else
+		Sleep((DWORD)((sleep + 999999) / 1000000));
+	#endif
 	}
 
 	mw->frame_time_last = maus_get_time_ns();

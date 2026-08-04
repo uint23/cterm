@@ -2,14 +2,16 @@
 
 for arg do
 	case "$arg" in
-		--backend=*) backend="${arg#*=}" ;;
 		--help)
-			echo "Usage: ./configure [--backend=x11|wayland|mac]"
+			echo "Usage: ./configure [x11|wayland|mac]"
 			exit 0
 			;;
 		*)
-			echo "Unknown argument: $arg"
-			exit 1
+			if [ -n "$backend" ]; then
+				echo "Usage: ./configure [x11|wayland|mac]"
+				exit 1
+			fi
+			backend="$arg"
 			;;
 	esac
 done
@@ -28,7 +30,12 @@ case "$backend" in
 		echo "CONF_LIB_NAME = libmaus_x11.a" >> config.mk
 		;;
 	wayland)
-		# TODO
+		echo "CONF_CPPFLAGS = -DBACKEND_WAY $(pkg-config --cflags wayland-client wayland-cursor xkbcommon)" >> config.mk
+		echo "CONF_LDFLAGS = $(pkg-config --libs wayland-client wayland-cursor xkbcommon)" >> config.mk
+		echo "CONF_SRC = source/maus_wayland.c build/xdg-shell-protocol.c build/pointer-constraints-unstable-v1-protocol.c build/relative-pointer-unstable-v1-protocol.c" >> config.mk
+		echo "CONF_OBJS = build/maus_wayland.o build/xdg-shell-protocol.o build/pointer-constraints-unstable-v1-protocol.o build/relative-pointer-unstable-v1-protocol.o" >> config.mk
+		echo "CONF_LIB_NAME = libmaus_wayland.a" >> config.mk
+		echo "PROTOS = $(pkg-config --variable=pkgdatadir wayland-protocols)" >> config.mk
 		;;
 	mac)
 		# TODO

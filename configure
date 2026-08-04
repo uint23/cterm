@@ -2,63 +2,64 @@
 set -eu
 
 PLATFORM=$(uname -s)
+BACKEND=${1:-}
 CPPFLAGS=
 LDFLAGS="-Llibmaus/build"
 
+if [ "$#" -gt 1 ]; then
+	echo "Usage: ./configure [x11|wayland|mac]" >&2
+	exit 1
+fi
+
 case "$PLATFORM" in
 	Darwin)
-		BACKEND=mac
-		LDLIBS="-lmaus_mac \
-		        -framework Cocoa \
-		        -framework CoreVideo \
-		        -framework IOKit \
-		        -framework CoreGraphics \
-		        -framework CoreFoundation \
-		        -framework Carbon"
+		: "${BACKEND:=mac}"
 		;;
-
 	Linux|FreeBSD|OpenBSD)
-		if [ -n "${WAYLAND_DISPLAY:-}" ]; then
-			BACKEND=way
-			CPPFLAGS=-DBACKEND_WAY
-			LDLIBS="-lmaus_way -lwayland-client"
-		elif [ -n "${DISPLAY:-}" ]; then
+		if [ -z "$BACKEND" ] && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+			BACKEND=wayland
+		elif [ -z "$BACKEND" ] && [ -n "${DISPLAY:-}" ]; then
 			BACKEND=x11
-			CPPFLAGS=-DBACKEND_X11
-			LDLIBS="-lmaus_x11 -lX11 -lXext"
-		else
+		elif [ -z "$BACKEND" ]; then
 			echo "No X11 or Wayland display found" >&2
 			exit 1
 		fi
-
-		case "$PLATFORM" in
-			Linux)
-				CPPFLAGS="-D_XOPEN_SOURCE=700 $CPPFLAGS"
-				;;
-			OpenBSD)
-				CPPFLAGS="-I/usr/X11R6/include $CPPFLAGS"
-				LDFLAGS="-L/usr/X11R6/lib $LDFLAGS"
-				;;
-		esac
 		;;
-
 	*)
 		echo "Unsupported platform: $PLATFORM" >&2
 		exit 1
 		;;
 esac
 
+case "$PLATFORM" in
+	Linux)
+		CPPFLAGS="-D_XOPEN_SOURCE=700"
+		;;
+	OpenBSD)
+		CPPFLAGS="-I/usr/X11R6/include"
+		LDFLAGS="-L/usr/X11R6/lib $LDFLAGS"
+		;;
+esac
+
 (
 	cd libmaus
 	rm -rf build/
-	./configure --backend="$BACKEND"
+	./configure "$BACKEND"
 	make
 )
 
+CONF_CPPFLAGS=$(sed -n 's/^CONF_CPPFLAGS = //p' libmaus/config.mk)
+CONF_LDFLAGS=$(sed -n 's/^CONF_LDFLAGS = //p' libmaus/config.mk)
+CONF_LIB_NAME=$(sed -n 's/^CONF_LIB_NAME = //p' libmaus/config.mk)
+CONF_LIB=${CONF_LIB_NAME#lib}
+CONF_LIB=${CONF_LIB%.a}
+
 cat >platform.mk <<EOF
-CPPFLAGS += $CPPFLAGS
+CPPFLAGS += $CPPFLAGS $CONF_CPPFLAGS
 LDFLAGS += $LDFLAGS
-LDLIBS += $LDLIBS
+LDLIBS += -l$CONF_LIB
+LDLIBS += ${CONF_LDFLAGS}
 EOF
 
 echo "Configuration done"
+

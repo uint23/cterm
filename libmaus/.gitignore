@@ -5,6 +5,7 @@
 *.obj
 *.lib
 
+build/
 compile_flags.txt
 
 fenster/

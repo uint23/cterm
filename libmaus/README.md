@@ -1,10 +1,10 @@
 ![logo](assets/logo_256x112.png)  
-is a small, cross-platform, software windowing library
+is a small, cross-platform, software windowing library **now in ANSI C**
 
 ### Building
 Unix:
 ```sh
-./configure --backend=[x11|wayland|mac]
+./configure [x11|wayland|mac]
 make # That's it!
 ```
 
@@ -12,15 +12,18 @@ Windows:
 ```
 .\build.bat [msvc|gcc|clang]
 ```
+> If anyone is on Windows, please try to compile past the ANSI conversion.
+> I pretty much converted it without checking so there may still be C99
+> artefacts left behind.
 
 After building, you have a library which you link _your_ sources with. It is
 located in `build/`.
 
 ### Usage
 #### libmaus
-Here is an annoted example for a basic window program which counts the number of
-frames that have elapsed, draw the text and displays if you've pressed a key
-(specifically 'A').
+Here is an annoted (C99) example for a basic window program which counts the
+number of frames that have elapsed, draw the text and displays if you've
+pressed a key (specifically 'A').
 
 For the full list of functions and what they do, look at
 [the header](include/maus.h).

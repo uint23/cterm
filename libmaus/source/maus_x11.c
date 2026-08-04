@@ -1,5 +1,4 @@
 #include <limits.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/shm.h>
@@ -21,11 +20,11 @@ typedef struct {
 	MausKey maus;
 } KeyMapEntry;
 
-static bool fb_create(Maus* mw);
-static bool fb_create_shm(Maus* mw);
-/* TODO? static bool fb_create_ximage(Maus* mw); */
+static int8_t fb_create(Maus* mw);
+static int8_t fb_create_shm(Maus* mw);
+/* TODO static int8_t fb_create_ximage(Maus* mw); */
 static void fb_destroy(Maus* mw);
-static bool handle_event(XEvent* xev, MausEvent* ev, Maus* mw);
+static int8_t handle_event(XEvent* xev, MausEvent* ev, Maus* mw);
 static MausKey keysym_to_mauskey(KeySym sym);
 static MausMouseButton mouse_button_to_maus(int btn);
 static int xerr(Display* dpy, XErrorEvent* ev);
@@ -59,11 +58,12 @@ static const KeyMapEntry keymap[] = {
 
 static int xerrored;
 
-static bool fb_create(Maus* mw)
+static int8_t fb_create(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
+
 	be->image = NULL;
-	be->shmat = false;
+	be->shmat = 0;
 	be->shm.shmid = -1;
 	be->shm.shmaddr = NULL;
 	mw->fb = NULL;
@@ -73,43 +73,48 @@ static bool fb_create(Maus* mw)
 }
 
 /* allocate and store a new shm for the framebuffer */
-static bool fb_create_shm(Maus* mw)
+static int8_t fb_create_shm(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
-	if (!XShmQueryExtension(be->display))
-		return false;
-
 	int scr = DefaultScreen(be->display);
 	int depth = DefaultDepth(be->display, scr);
 	Visual* vis = DefaultVisual(be->display, scr);
+
+	size_t size;
+	int (*old_xerr)(Display*, XErrorEvent*);
+
+	if (!XShmQueryExtension(be->display))
+		return 0;
+
 	if (!vis) {
 		maus_log(stderr, "could not get default visual");
-		return false;
+		return 0;
 	}
 
 	be->image = XShmCreateImage(
 		be->display, vis, depth, ZPixmap, NULL,
 		&be->shm, mw->width, mw->height
 	);
+
 	if (!be->image) {
 		maus_log(stderr, "could not create XImage (shm)");
-		return false;
+		return 0;
 	}
 
 	if (be->image->bits_per_pixel != 32) {
 		XDestroyImage(be->image);
 		be->image = NULL;
 		maus_log(stderr, "XImage not 32bpp");
-		return false;
+		return 0;
 	}
 
-	size_t size = be->image->bytes_per_line * be->image->height;
+	size = be->image->bytes_per_line * be->image->height;
 	be->shm.shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0600);
 	if (be->shm.shmid < 0) {
 		XDestroyImage(be->image);
 		be->image = NULL;
 		maus_log(stderr, "shmget() failed");
-		return false;
+		return 0;
 	}
 
 	be->shm.shmaddr = shmat(be->shm.shmid, NULL, 0);
@@ -118,14 +123,14 @@ static bool fb_create_shm(Maus* mw)
 		XDestroyImage(be->image);
 		be->image = NULL;
 		maus_log(stderr, "shmat() failed");
-		return false;
+		return 0;
 	}
 
 	be->shm.readOnly = False;
 	be->image->data = be->shm.shmaddr;
 
 	xerrored = 0;
-	int (*old_xerr)(Display*, XErrorEvent*) = XSetErrorHandler(xerr);
+	old_xerr = XSetErrorHandler(xerr);
 
 	if (!XShmAttach(be->display, &be->shm))
 		xerrored = 1;
@@ -142,26 +147,27 @@ static bool fb_create_shm(Maus* mw)
 		be->shm.shmaddr = NULL;
 		be->shm.shmid = -1;
 		maus_log(stderr, "XShmAttach failed");
-		return false;
+		return 0;
 	}
 
 	shmctl(be->shm.shmid, IPC_RMID, NULL);
 
-	be->shmat = true;
+	be->shmat = 1;
 	mw->fb = (uint32_t*) be->image->data;
 	mw->stride = be->image->bytes_per_line / sizeof(uint32_t);
 
-	return true;
+	return 1;
 }
 
 static void fb_destroy(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
 	Display* dpy = be->display;
+
 	if (be->shmat) {
 		XShmDetach(dpy, &be->shm);
 		XSync(dpy, False);
-		be->shmat = false;
+		be->shmat = 0;
 	}
 
 	if (be->image) {
@@ -185,73 +191,85 @@ static void fb_destroy(Maus* mw)
 	mw->stride = 0;
 }
 
-static bool handle_event(XEvent* xev, MausEvent* ev, Maus* mw)
+static int8_t handle_event(XEvent* xev, MausEvent* ev, Maus* mw)
 {
 	MausBackend* be = &mw->backend;
 	uint32_t code = 0;
 	unsigned int mb;
 	MausMouseButton mbtype;
 
+	char buf[8] = {0};
+	int len;
+
+	KeySym sym;
+
+	XSelectionRequestEvent* req;
+	XEvent rsp; /* response */
+	Atom utf8_string;
+	Atom clipboard;
+
+	int cx;
+	int cy;
+
 	switch (xev->type) {
 		case Expose:
 			if (xev->xexpose.count != 0)
-				return false;
+				return 0;
 			ev->type = MAUS_EV_REDRAW;
-			return true;
+			return 1;
 
 		case ClientMessage:
 			if ((Atom)xev->xclient.data.l[0] == be->atoms[MAUS_ATOM_WM_DELETE_WINDOW]) {
 				ev->type = MAUS_EV_CLOSE;
-				return true;
+				return 1;
 			}
 			break;
 
 		case MappingNotify:
 			XRefreshKeyboardMapping(&xev->xmapping);
-			return true;
+			return 1;
 			break;
 
 		case KeyPress: {
 			ev->type = MAUS_EV_KEY;
 			code = xev->xkey.keycode;
 			ev->key.code = code;
-			ev->key.pressed = true;
+			ev->key.pressed = 1;
 			if (code < MAUS_KEYCODE_LAST)
-			        mw->key_codes[code] = true;
+			        mw->key_codes[code] = 1;
 
 			/* grab the raw, base sym */
-			KeySym sym = XLookupKeysym(&xev->xkey, 0);
+			sym = XLookupKeysym(&xev->xkey, 0);
 			ev->key.key = keysym_to_mauskey(sym);
 			if (ev->key.key != MAUS_KEY_NONE)
-			        mw->key_syms[ev->key.key] = true;
+			        mw->key_syms[ev->key.key] = 1;
 
-			char buf[8] = {0};
-			int len = XLookupString(&xev->xkey, buf, sizeof(buf), NULL, NULL);
+			len = XLookupString(&xev->xkey, buf, sizeof(buf), NULL, NULL);
 			if (len > 0)
-			        ev->key.text = (buf[0] == '\r') ? '\n' : buf[0];
+				ev->key.text = (buf[0] == '\r') ? '\n' : buf[0];
 			else
-			        ev->key.text = 0;
+				ev->key.text = 0;
 
-			return true;
+			return 1;
 		}
 
 		case KeyRelease: {
 			ev->type = MAUS_EV_KEY;
 			code = xev->xkey.keycode;
 			ev->key.code = code;
-			ev->key.pressed = false;
+			ev->key.pressed = 0;
 			ev->key.text = 0;
 
 			if (code < MAUS_KEYCODE_LAST)
-			        mw->key_codes[code] = false;
+			        mw->key_codes[code] = 0;
 
 			/* unset base sym set on `KeyPress` */
-			KeySym sym = XLookupKeysym(&xev->xkey, 0);
+			sym = XLookupKeysym(&xev->xkey, 0);
 			ev->key.key = keysym_to_mauskey(sym);
 			if (ev->key.key != MAUS_KEY_NONE)
-			        mw->key_syms[ev->key.key] = false;
+			        mw->key_syms[ev->key.key] = 0;
 
-			return true;
+			return 1;
 		}
 
 		case ButtonPress:
@@ -259,37 +277,67 @@ static bool handle_event(XEvent* xev, MausEvent* ev, Maus* mw)
 			mb = xev->xbutton.button;
 			mbtype = mouse_button_to_maus(mb);
 			ev->mouse.button.button = mbtype;
-			ev->mouse.button.pressed = true;
-			mw->mouse_buttons[mbtype] = true;
-			return true;
+			ev->mouse.button.pressed = 1;
+			mw->mouse_buttons[mbtype] = 1;
+			return 1;
 
 		case ButtonRelease:
 			ev->type = MAUS_EV_MOUSE_BUTTON;
 			mb = xev->xbutton.button;
 			mbtype = mouse_button_to_maus(mb);
 			ev->mouse.button.button = mbtype;
-			ev->mouse.button.pressed = false;
-			mw->mouse_buttons[mbtype] = false;
-			return true;
+			ev->mouse.button.pressed = 0;
+			mw->mouse_buttons[mbtype] = 0;
+			return 1;
 
 		case MotionNotify:
+			if (be->cur_rel) {
+				cx = mw->width / 2;
+				cy = mw->height / 2;
+
+				if (be->ignore_warp && xev->xmotion.x == cx && xev->xmotion.y == cy) {
+					be->ignore_warp = 0;
+					return 0;
+				}
+
+				ev->type = MAUS_EV_MOUSE_MOTION;
+				ev->mouse.motion.x = xev->xmotion.x - cx;
+				ev->mouse.motion.y = xev->xmotion.y - cy;
+				ev->mouse.motion.dx = ev->mouse.motion.x;
+				ev->mouse.motion.dy = ev->mouse.motion.y;
+
+				if (ev->mouse.motion.x != 0 || ev->mouse.motion.y != 0) {
+					be->ignore_warp = 1;
+					XWarpPointer(
+						be->display, None, be->win,
+						0, 0, 0, 0, cx, cy
+					);
+					XFlush(be->display);
+				}
+
+				return ev->mouse.motion.x != 0 || ev->mouse.motion.y != 0;
+			}
 			ev->type = MAUS_EV_MOUSE_MOTION;
 			ev->mouse.motion.x = xev->xmotion.x;
 			ev->mouse.motion.y = xev->xmotion.y;
-			return true;
+			ev->mouse.motion.dx = be->mouse_pos_set ? xev->xmotion.x - be->mouse_x : 0;
+			ev->mouse.motion.dy = be->mouse_pos_set ? xev->xmotion.y - be->mouse_y : 0;
+			be->mouse_x = xev->xmotion.x;
+			be->mouse_y = xev->xmotion.y;
+			be->mouse_pos_set = 1;
+			return 1;
 
 		case ConfigureNotify:
 			ev->type = MAUS_EV_RESIZE;
 			ev->resize.width = xev->xconfigure.width;
 			ev->resize.height = xev->xconfigure.height;
-			return true;
+			return 1;
 
 		case SelectionRequest: {
-			XSelectionRequestEvent* req = &xev->xselectionrequest;
-			XEvent rsp; /* response */
+			req = &xev->xselectionrequest;
 
-			Atom utf8_string = XInternAtom(be->display, "UTF8_STRING", False);
-			Atom clipboard = XInternAtom(be->display, "CLIPBOARD", False);
+			utf8_string = XInternAtom(be->display, "UTF8_STRING", False);
+			clipboard = XInternAtom(be->display, "CLIPBOARD", False);
 
 			rsp.type = SelectionNotify;
 			rsp.xselection.display = req->display;
@@ -317,15 +365,17 @@ static bool handle_event(XEvent* xev, MausEvent* ev, Maus* mw)
 			XSendEvent(req->display, req->requestor, False, 0, &rsp);
 			XFlush(be->display);
 
-			return false; /* skip maus polling it */
+			return 0; /* skip maus polling it */
 		}
 	}
 
-	return false;
+	return 0;
 }
 
 static MausKey keysym_to_mauskey(KeySym sym)
 {
+	size_t i;
+
 	if (sym >= 0x20 && sym <= 0x7E)
 		return (MausKey)sym;
 
@@ -334,7 +384,7 @@ static MausKey keysym_to_mauskey(KeySym sym)
 	if (sym >= XK_KP_0 && sym <= XK_KP_9)
 		return MAUS_KEY_KP_0 + (sym - XK_KP_0);
 
-	for (size_t i = 0; i < sizeof(keymap)/ sizeof(keymap[0]); i++) {
+	for (i = 0; i < sizeof(keymap)/ sizeof(keymap[0]); i++) {
 		if (keymap[i].x11 == sym)
 			return keymap[i].maus;
 	}
@@ -365,6 +415,8 @@ static int xerr(Display* dpy, XErrorEvent* ev)
 void maus_clipboard_set_text(Maus* mw, const char* text)
 {
 	MausBackend* be = &mw->backend;
+	Atom clipboard;
+
 	if (!be->display || be->win == None)
 		return;
 
@@ -377,7 +429,7 @@ void maus_clipboard_set_text(Maus* mw, const char* text)
 	if (text)
 		mw->clipboard = maus_strdup(text);
 
-	Atom clipboard = XInternAtom(be->display, "CLIPBOARD", False);
+	clipboard = XInternAtom(be->display, "CLIPBOARD", False);
 	XSetSelectionOwner(be->display, clipboard, be->win, CurrentTime);
 	XFlush(be->display);
 }
@@ -389,6 +441,19 @@ char* maus_clipboard_get_text(Maus* mw)
 	Atom utf8_string = XInternAtom(be->display, "UTF8_STRING", False);
 	Atom maus_clipboard_prop = XInternAtom(be->display, "MAUS_CLIPBOARD_PROP", False);
 
+	XEvent xev;
+	int8_t ok = 0;
+
+	int timeout;
+
+	Atom actual_type;
+	int actual_fmt;
+	unsigned long nitems;
+	unsigned long bytes_after;
+	unsigned char* prop_data = NULL;
+
+	char* res = NULL;
+
 	/* fetch clipboard data to `maus_clipboard_prop`
 	   window property */
 	XConvertSelection(
@@ -398,12 +463,10 @@ char* maus_clipboard_get_text(Maus* mw)
 	XFlush(be->display);
 
 	/* check for selection response */
-	XEvent xev;
-	bool ok = false;
-	for (int timeout = 0; timeout < 10000; timeout++) { 
+	for (timeout = 0; timeout < 10000; timeout++) { 
 		if (XCheckTypedWindowEvent(be->display, be->win, SelectionNotify, &xev)) {
 			if (xev.xselection.property != None)
-				ok = true;
+				ok = 1;
 			break;
 		}
 	}
@@ -411,18 +474,12 @@ char* maus_clipboard_get_text(Maus* mw)
 		return NULL;
 
 	/* read string off property */
-	Atom actual_type;
-	int actual_fmt;
-	unsigned long nitems;
-	unsigned long bytes_after;
-	unsigned char* prop_data = NULL;
 	XGetWindowProperty(
 		be->display, be->win, maus_clipboard_prop, 0,LONG_MAX,
 		True, utf8_string, &actual_type, &actual_fmt, &nitems,
 		&bytes_after, &prop_data
 	);
 
-	char* res = NULL;
 	if (prop_data) {
 		res = maus_strdup((char*)prop_data);
 		XFree(prop_data);
@@ -434,6 +491,7 @@ char* maus_clipboard_get_text(Maus* mw)
 void maus_close(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
+
 	fb_destroy(mw);
 	if (mw->bfb) {
 		free(mw->bfb);
@@ -450,9 +508,10 @@ void maus_close(Maus* mw)
 		XCloseDisplay(be->display);
 }
 
-bool maus_close_window(Maus* mw)
+int8_t maus_close_window(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
+
 	if (be->gc) {
 		XFreeGC(be->display, be->gc);
 		be->gc = 0;
@@ -463,10 +522,10 @@ bool maus_close_window(Maus* mw)
 		XDestroyWindow(be->display, be->win);
 	}
 
-	return true;
+	return 1;
 }
 
-bool maus_create_window(Maus* mw)
+int8_t maus_create_window(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
 	Display* dpy = be->display;
@@ -480,12 +539,13 @@ bool maus_create_window(Maus* mw)
 	);
 
 	if (*win == None)
-		return false;
+		return 0;
 
 	XSelectInput(dpy, *win,
 		ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask |
 		ButtonReleaseMask | PointerMotionMask | StructureNotifyMask
 	);
+
 	/* no black flashing when resizing */
 	XSetWindowBackgroundPixmap(dpy, *win, None);
 
@@ -502,36 +562,44 @@ bool maus_create_window(Maus* mw)
 	if (!be->gc) {
 		maus_log(stderr, "failed to create window GC");
 		maus_close_window(mw);
-		return false;
+		return 0;
 	}
 
-	return true;
+	return 1;
 }
 
 void maus_clear(Maus* mw, MausColor col)
 {
 	uint32_t col_up = MAUS_UNPACK_COL(col);
 	uint32_t pxs = mw->height * mw->width;
-	for (uint32_t i = 0; i < pxs; i++)
+	uint32_t i;
+	for (i = 0; i < pxs; i++)
 		mw->bfb[i] = col_up;
 }
 
 Maus* maus_init(const char* title, int x, int y, int width, int height)
 {
+	Display* d = XOpenDisplay(NULL);
+	Maus* mw = calloc(1, sizeof(Maus));
+	MausBackend* be = &mw->backend;
+
 	if (MAUS_WARN_BACKEND_AUTO_SEL)
 		maus_log(stderr, "backend auto-selected: X11");
 
-	Display* d = XOpenDisplay(NULL);
 	if (!d) {
 		maus_die("failed to open X11 display");
 		return NULL;
 	}
 
-	Maus* mw = calloc(1, sizeof(Maus));
-	MausBackend* be = &mw->backend;
 	be->display = d;
 	be->root = DefaultRootWindow(d);
 	be->win = None;
+	be->cur_rel = 0;
+	be->ignore_warp = 0;
+	be->mouse_x = 0;
+	be->mouse_y = 0;
+	be->mouse_pos_set = 0;
+
 	mw->frame_time_last = maus_get_time_ns();
 	mw->title = title;
 	mw->width = width;
@@ -542,7 +610,7 @@ Maus* maus_init(const char* title, int x, int y, int width, int height)
 
 	be->gc = 0;
 	be->image = NULL;
-	be->shmat = false;
+	be->shmat = 0;
 	be->shm.shmid = -1;
 	be->shm.shmaddr = NULL;
 	if (!fb_create(mw)) {
@@ -562,25 +630,27 @@ Maus* maus_init(const char* title, int x, int y, int width, int height)
 	return mw;
 }
 
-bool maus_event_poll(Maus* mw, MausEvent* ev)
+int8_t maus_event_poll(Maus* mw, MausEvent* ev)
 {
 	MausBackend* be = &mw->backend;
 	XEvent xev;
+
 	while (XPending(be->display)) {
 		XNextEvent(be->display, &xev);
 		ev->type = MAUS_EV_NONE;
 		if (handle_event(&xev, ev, mw))
-			return true;
+			return 1;
 
 	}
 
-	return false;
+	return 0;
 }
 
 void maus_event_wait(Maus* mw, MausEvent* ev)
 {
 	MausBackend* be = &mw->backend;
 	XEvent xev;
+
 	for (;;) {
 		XNextEvent(be->display, &xev);
 		ev->type = MAUS_EV_NONE;
@@ -592,10 +662,12 @@ void maus_event_wait(Maus* mw, MausEvent* ev)
 void maus_present(Maus* mw)
 {
 	MausBackend* be = &mw->backend;
+	uint32_t bytes;
+
 	if (!be->image || be->win == None)
 		return;
 
-	uint32_t bytes = mw->stride * mw->height * sizeof(uint32_t);
+	bytes = mw->stride * mw->height * sizeof(uint32_t);
 	memcpy(mw->fb, mw->bfb, bytes);
 
 	XShmPutImage(
@@ -606,12 +678,13 @@ void maus_present(Maus* mw)
 	XFlush(be->display);
 }
 
-bool maus_resize(Maus* mw, uint32_t width, uint32_t height)
+int8_t maus_resize(Maus* mw, uint32_t width, uint32_t height)
 {
 	MausBackend* be = &mw->backend;
+
 	if (width == 0 || height == 0 ||
 	    (mw->width == width && mw->height == height))
-		return false;
+		return 0;
 
 	fb_destroy(mw);
 	if (mw->bfb) {
@@ -626,13 +699,13 @@ bool maus_resize(Maus* mw, uint32_t width, uint32_t height)
 	XFlush(be->display);
 
 	if (!fb_create(mw))
-		return false;
+		return 0;
 
 	mw->bfb = calloc(mw->stride * mw->height, sizeof(uint32_t));
 	if (!mw->bfb)
-		return false;
+		return 0;
 
-	return true;
+	return 1;
 }
 
 void maus_cur_set_mode(Maus* mw, MausCursorState state)
@@ -640,6 +713,9 @@ void maus_cur_set_mode(Maus* mw, MausCursorState state)
 	MausBackend* be = &mw->backend;
 	Display* dpy = be->display;
 	Window win = be->win;
+
+	Mask mask;
+	int grab;
 
 	if (!dpy) {
 		maus_log(stderr, "display is NULL");
@@ -660,7 +736,7 @@ void maus_cur_set_mode(Maus* mw, MausCursorState state)
 	/* hide cursor */
 	if (state == MAUS_CURSOR_STATE_HIDDEN) {
 		Pixmap blank_pm = XCreatePixmap(dpy, win, 1, 1, 1);
-		XColor black = {.red=0, .green=0, .blue=0};
+		XColor black = {0, 0, 0, 0, 0, 0};
 		Cursor blank_cur = XCreatePixmapCursor(
 			dpy, blank_pm, blank_pm, &black, &black, 0, 0
 		);
@@ -674,8 +750,8 @@ void maus_cur_set_mode(Maus* mw, MausCursorState state)
 
 	/* lock cursor */
 	if (state == MAUS_CURSOR_STATE_LOCKED) {
-		Mask mask = ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
-		int grab = XGrabPointer(
+		mask = ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
+		grab = XGrabPointer(
 			dpy, win, True, mask, GrabModeAsync,
 			GrabModeAsync, win, None, CurrentTime
 		);
@@ -693,6 +769,35 @@ void maus_cur_set_mode(Maus* mw, MausCursorState state)
 
 	/* unlock cursor */
 	if (state == MAUS_CURSOR_STATE_FREE) {
+		XUngrabPointer(dpy, CurrentTime);
+		XFlush(dpy);
+		return;
+	}
+
+	/* relative cursor */
+	if (state == MAUS_CURSOR_STATE_RELATIVE) {
+		mask = ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
+		grab = XGrabPointer(
+			dpy, win, True, mask, GrabModeAsync,
+			GrabModeAsync, win, None, CurrentTime
+		);
+
+		if (grab != GrabSuccess) {
+			maus_log(stderr, "failed to grab mouse pointer");
+			return;
+		}
+
+		be->cur_rel = 1;
+		be->ignore_warp = 1;
+		XWarpPointer(dpy, None, win, 0, 0, 0, 0, mw->width/2, mw->height/2);
+		XFlush(dpy);
+		return;
+	}
+
+	/* absolute cursor */
+	if (state == MAUS_CURSOR_STATE_ABSOLUTE) {
+		be->cur_rel = 0;
+		be->ignore_warp = 0;
 		XUngrabPointer(dpy, CurrentTime);
 		XFlush(dpy);
 		return;
