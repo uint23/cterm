@@ -15,7 +15,7 @@ OUT = cterm
 
 all:
 	if [ ! -e config.h ]; then cp config.def.h config.h; fi
-	${CC} ${CFLAGS} -Os ${CPPFLAGS} ${SRCS} ${LDFLAGS} -o ${OUT} ${LDLIBS}
+	${CC} ${CFLAGS} -O2 ${CPPFLAGS} ${SRCS} ${LDFLAGS} -o ${OUT} ${LDLIBS}
 
 debug:
 	if [ ! -e config.h ]; then cp config.def.h config.h; fi
