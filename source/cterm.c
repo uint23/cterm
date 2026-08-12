@@ -62,10 +62,8 @@ static void cleanup(void)
 	free(term.alt);
 	font_free(&font);
 
-	if (win) {
+	if (win)
 		maus_close(win);
-		free(win);
-	}
 }
 
 /* dispatch correct keycode handling non ascii characters */
