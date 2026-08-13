@@ -700,7 +700,10 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			else if (ch == '?' || ch == '>' || ch == '=') {
 				/* private CSI marker */
 			}
-			else {
+			else if (ch >= 0x20 && ch <= 0x2f) {
+				/* CSI intermediate byte */
+			}
+			else if (ch >= 0x40 && ch <= 0x7e) {
 				csi_dispatch(t, c, ch);
 				t->state = TSTATE_NORMAL;
 			}
