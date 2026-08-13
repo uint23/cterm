@@ -5,6 +5,7 @@ PLATFORM=$(uname -s)
 BACKEND=${1:-}
 CPPFLAGS=
 LDFLAGS="-Llibmaus/build"
+LDLIBS=
 
 if [ "$#" -gt 1 ]; then
 	echo "Usage: ./configure [x11|wayland|mac]" >&2
@@ -35,11 +36,14 @@ case "$PLATFORM" in
 	Linux)
 		CPPFLAGS="-D_XOPEN_SOURCE=700"
 		;;
+	FreeBSD)
+		LDLIBS="-lutil"
+		;;
 	OpenBSD)
 		CPPFLAGS="-I/usr/X11R6/include"
 		LDFLAGS="-L/usr/X11R6/lib $LDFLAGS"
-		;;
-esac
+		LDLIBS="-lutil"
+		;;esac
 
 (
 	cd libmaus
@@ -58,7 +62,7 @@ cat >platform.mk <<EOF
 CPPFLAGS += $CPPFLAGS $CONF_CPPFLAGS
 LDFLAGS += $LDFLAGS
 LDLIBS += -l$CONF_LIB
-LDLIBS += ${CONF_LDFLAGS}
+LDLIBS += ${CONF_LDFLAGS} $LDLIBS
 EOF
 
 echo "Configuration done"
