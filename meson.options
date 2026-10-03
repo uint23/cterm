@@ -1,0 +1,8 @@
+option(
+    'window_backend',
+    type: 'combo',
+    choices: ['auto', 'x11', 'wayland'],
+    value: 'auto',
+    description: 'libmaus window backend',
+)
+

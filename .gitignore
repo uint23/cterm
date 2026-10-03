@@ -3,7 +3,9 @@ cterm
 *.o
 *.swp
 *.swo
-platform.mk
+build/
+subprojects/*
+!subprojects/*.wrap
 *.ttf
 *.bdf
 *.tar
