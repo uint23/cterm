@@ -12,9 +12,13 @@ meson setup build
 meson compile -C build
 ```
 
-libmaus is fetched automatically as a Meson subproject. The window backend can
-be selected explicitly with `-Dwindow_backend=x11` or
-`-Dwindow_backend=wayland`; the default is `auto`.
+If you don't have access to meson or don't want to install it, clone the
+libmaus repo and follow the manual build options there. An example compile for
+X11 would be like so:
+``` sh
+cc -Iinclude source/cterm.c source/draw.c source/font.c source/term.c source/utils.c \
+   /path/to/libmaus_x11.a -I/path/to/libmaus/include -I./ -lX11 -lXext -lXi -o cterm
+```
 
 ### About
 cterm is a tiny terminal emulator I built from frustrations of not being able
