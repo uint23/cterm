@@ -1,4 +1,3 @@
-#include "maus_input.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
@@ -19,7 +18,7 @@
 
 #include <maus.h>
 
-#include "../config.h"
+#include "config.h"
 #include "draw.h"
 #include "font.h"
 #include "term.h"
