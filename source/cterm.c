@@ -340,7 +340,7 @@ static void run(void)
 		}
 
 		if (redraw_all) {
-			draw_clear(win->bfb, win->stride, winh, rgba(0, 0, 0, 255));
+			maus_clear(win, MAUS_COL_ARGB((default_bg >> 24) & 0xff, (default_bg >> 16) & 0xff, (default_bg >> 8) & 0xff, default_bg & 0xff));
 			term_damage_all(&term);
 		}
 

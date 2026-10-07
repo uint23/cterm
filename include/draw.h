@@ -5,9 +5,6 @@
 
 #include "font.h"
 
-/* clear a buffer size wxh */
-void draw_clear(uint32_t* dst, int w, int h, uint32_t col);
-
 /* draw a run of properties (look: vvvv) to screen */
 void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
                uint32_t bg);

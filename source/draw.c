@@ -45,12 +45,6 @@ static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
 	px[3] = 255;
 }
 
-void draw_clear(uint32_t* dst, int w, int h, uint32_t col)
-{
-	for (int i = 0; i < w*h; i++)
-		dst[i] = col;
-}
-
 void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
                uint32_t bg)
 {
