@@ -23,7 +23,7 @@ cc -Iinclude source/cterm.c source/draw.c source/font.c source/term.c source/uti
 ### About
 cterm is a tiny terminal emulator I built from frustrations of not being able
 to use [st](https://st.suckless.org/) between different platforms. Like st,
-it's very, smalle. Even more so than st itself.
+it's very, small. Even more so than st itself.
 
 For this reason, cterm lacks the "standard" terminal emulator features such as
 mouse selection, scrollback, fancy graphics, configuration files, the like;
