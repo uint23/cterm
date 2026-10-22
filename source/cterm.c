@@ -133,8 +133,8 @@ static void init(void)
 	if (font_load(&font, font_path) < 0)
 		die(1, "failed to load font");
 
-	winw = win_width*font.cellw;
-	winh = win_height*font.cellh;
+	winw = win_width * font.cellw + 2 * padding;
+	winh = win_height * font.cellh + 2 * padding;
 
 	if (term_resize(&term, &car, win_width, win_height) < 0)
 		die(1, "failed to resize terminal");
@@ -270,8 +270,8 @@ static int resize_window(int w, int h)
 /* TODO */
 static void resize_terminal(int w, int h)
 {
-	int cols = w / font.cellw;
-	int rows = h / font.cellh;
+	int cols = (w - 2 * padding) / font.cellw;
+	int rows = (h - 2 * padding) / font.cellh;
 
 	if (cols < 1)
 		cols = 1;

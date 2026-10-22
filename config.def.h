@@ -11,9 +11,7 @@ static const int   win_width = 80;  /* in columns */
 static const int   win_height = 24; /* in rows */
 static const char  win_title[] = "cterm";
 static const int   win_fps = 60;
-
-static const int   pad_x = 8;
-static const int   pad_y = 8;
+static const int   padding = 8;
 
 static const char* const shell = NULL; /* NULL uses $SHELL */
 static const char term_name[] = "vt100";
