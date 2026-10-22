@@ -48,8 +48,8 @@ static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
 void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
                uint32_t bg)
 {
-	int x0 = cl * cw; /* x origin of cell */
-	int y0 = rw * ch; /* y origin of cell */
+	int x0 = cl; /* x origin of cell */
+	int y0 = rw; /* y origin of cell */
 	int x;
 	int y;
 

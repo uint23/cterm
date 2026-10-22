@@ -344,6 +344,9 @@ static void run(void)
 			term_damage_all(&term);
 		}
 
+		int grid_x = (winw - term.cols * font.cellw) / 2;
+		int grid_y = (winh - term.rows * font.cellh) / 2;
+
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
 				Rune* r = &RUNE(&term, x, y);
@@ -363,15 +366,17 @@ static void run(void)
 					continue;
 
 				draw_rune(
-					win->bfb, win->stride, winh, x, y,
+					win->bfb, win->stride, winh,
+					grid_x + x * font.cellw,
+					grid_y + y * font.cellh,
 					font.cellw, font.cellh, bg
 				);
 
 				if (r->cp != ' ') {
 					draw_codepoint(
 						&font, win->bfb, win->stride, winh,
-						x * font.cellw,
-						y * font.cellh + (int)font.asc,
+						grid_x + x * font.cellw,
+						grid_y + y * font.cellh + (int)font.asc,
 						r->cp,
 						fg
 					);
