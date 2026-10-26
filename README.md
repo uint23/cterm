@@ -6,6 +6,22 @@ macOS won't build as libmaus doesn't have implementations for it. If you would
 be interested in making one for your own platform, it would be amazing if you
 could contribute!
 
+##### OpenBSD
+If you're on X11, you may want to increase the shm buffer limit as you may only
+be able to open a few windows.
+
+In `/etc/sysctl.conf`, something like:
+```
+kern.shminfo.shmall=65536
+```
+
+Or immediately:
+```sh
+sysctl kern.shminfo.shmall=65536
+```
+
+65536 is more than enough pages.
+
 ### Building:
 ``` sh
 meson setup build
