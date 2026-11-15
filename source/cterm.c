@@ -127,6 +127,9 @@ static bool handle_key(const MausEvent* ev)
 /* initialise font, window, pty */
 static void init(void)
 {
+	const char* lang = getenv("LANG");
+	if (!getenv("LC_ALL") && !getenv("LC_CTYPE") && (!lang || !*lang))
+		setenv("LC_CTYPE", "C.UTF-8", 1);
 	setlocale(LC_CTYPE, "");
 
 	/* font */
