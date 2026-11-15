@@ -4,8 +4,7 @@
 
 #include "utils.h"
 
-/* perror `msg` and exit program with `ec`
-   TODO? stdarg */
+/* perror `msg` and exit program with `ec` */
 void die(int ec, const char* msg, ...)
 {
 	va_list args;
@@ -35,3 +34,4 @@ void* xmalloc(size_t len)
 		die(EXIT_FAILURE, "malloc failed");
 	return p;
 }
+
