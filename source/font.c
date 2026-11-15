@@ -23,6 +23,7 @@ static int load_bdf(Fontface* f, const char* path)
 	int dsc = -1;
 	int encoding = -1;
 	int advance = 0;
+	int ascii_advance = 0;
 	int bw = 0; /* bmp width */
 	int bh = 0; /* bmp height */
 	int xoff = 0;
@@ -114,6 +115,8 @@ static int load_bdf(Fontface* f, const char* path)
 				g->valid = 1;
 				if (advance > f->cellw)
 					f->cellw = advance;
+				if (encoding >= 32 && encoding <= 126 && advance > ascii_advance)
+					ascii_advance = advance;
 				seen_any_glyph = 1;
 
 				continue;
@@ -128,6 +131,8 @@ static int load_bdf(Fontface* f, const char* path)
 
 	if (!seen_any_glyph)
 		return -1;
+	if (ascii_advance > 0)
+		f->cellw = ascii_advance; /* wide glyphs use two cells */
 
 	/* estimate asc/dsc if they werent provided */
 	if (asc < 0 || dsc < 0) {

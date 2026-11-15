@@ -4,6 +4,7 @@
 
 #include "../config.h"
 #include "term.h"
+#include "utf8.h"
 #include "utils.h"
 
 static int csi_arg(Term* t, int i, int fallback);
@@ -471,6 +472,10 @@ void term_damage_rune(Term* t, int x, int y)
 	if (x < 0 || y < 0 || x >= t->cols || y >= t->rows)
 		return;
 	RUNE(t, x, y).dmg = true;
+	if (RUNE(t, x, y).width == 0 && x > 0)
+		RUNE(t, x - 1, y).dmg = true;
+	if (RUNE(t, x, y).width == 2 && x + 1 < t->cols)
+		RUNE(t, x + 1, y).dmg = true;
 }
 
 void term_putc(Term* t, Caret* c, uint32_t cp)
@@ -502,30 +507,44 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 			term_putc(t, c, '\n');
 		break;
 	default: {
-		if (cp < 32)
+		int width = utf8codepointvisualwidth(cp);
+		if (width <= 0)
 			break;
+		if (width == 2 && t->cols < 2)
+			width = 1;
 
-		if (t->wrapnext) {
+		if (t->wrapnext || c->x + width > t->cols) {
 			term_putc(t, c, '\n');
 			t->wrapnext = false;
 		}
 
 		rune_prepare(t, c->x, c->y);
+		if (width == 2)
+			rune_prepare(t, c->x + 1, c->y);
 		Rune* r = &RUNE(t, c->x, c->y);
 		if (r->cp != cp || r->fg != t->fg || r->bg != t->bg ||
-		    r->attr != t->attr || r->width != 1) {
+		    r->attr != t->attr || r->width != width) {
 			r->cp = cp;
 			r->fg = t->fg;
 			r->bg = t->bg;
 			r->attr = t->attr;
-			r->width = 1;
+			r->width = width;
 			r->dmg = true;
 		}
+		if (width == 2) {
+			Rune* tail = &RUNE(t, c->x + 1, c->y);
+			tail->cp = ' ';
+			tail->fg = t->fg;
+			tail->bg = t->bg;
+			tail->attr = t->attr;
+			tail->width = 0;
+			tail->dmg = true;
+		}
 
-		if (c->x + 1 >= t->cols)
+		if (c->x + width >= t->cols)
 			t->wrapnext = true;
 		else
-			c->x++;
+			c->x += width;
 
 		break;
 	}
@@ -621,21 +640,47 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 
 		switch (t->state) {
 		case TSTATE_NORMAL:
-			if (ch == '\x1B') {
+			if (t->utf8_need) {
+				if ((ch & 0xc0) == 0x80) {
+					t->utf8_buf[t->utf8_len++] = ch;
+					if (t->utf8_len == t->utf8_need) {
+						utf8_int32_t cp;
+						t->utf8_buf[t->utf8_len] = '\0';
+						if (utf8valid(t->utf8_buf) == NULL) {
+							utf8codepoint(t->utf8_buf, &cp);
+							term_putc(t, c, (uint32_t)cp);
+						}
+						else
+							term_putc(t, c, 0xfffd);
+						t->utf8_len = t->utf8_need = 0;
+					}
+					break;
+				}
+				t->utf8_len = t->utf8_need = 0;
+				term_putc(t, c, 0xfffd);
+			}
+			if (ch == '\x1B')
 				t->state = TSTATE_ESC;
-			}
-			else if (ch == '\x0E') {
+			else if (ch == '\x0E')
 				t->charset = 1;
-			}
-			else if (ch == '\x0F') {
+			else if (ch == '\x0F')
 				t->charset = 0;
-			}
 			else if (ch >= 0x80) {
-				/* utf8 unsupported . ignore high bit bytes */
+				if (ch >= 0xc2 && ch <= 0xdf)
+					t->utf8_need = 2;
+				else if (ch >= 0xe0 && ch <= 0xef)
+					t->utf8_need = 3;
+				else if (ch >= 0xf0 && ch <= 0xf4)
+					t->utf8_need = 4;
+				else
+					term_putc(t, c, 0xfffd);
+				if (t->utf8_need) {
+					t->utf8_buf[0] = ch;
+					t->utf8_len = 1;
+				}
 			}
-			else {
+			else
 				term_putc(t, c, t->acs[t->charset] ? acs_map(ch) : ch);
-			}
 			break;
 
 		case TSTATE_ESC:

@@ -353,8 +353,13 @@ static void run(void)
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
 				Rune* r = &RUNE(&term, x, y);
-				bool cursor = term.cursor_visible &&
-				              x == car.x && y == car.y;
+				if (r->width == 0) {
+					r->dmg = false;
+					continue;
+				}
+				bool wide = r->width == 2 && x + 1 < term.cols;
+				bool cursor = term.cursor_visible && y == car.y &&
+				              (x == car.x || (wide && x + 1 == car.x));
 				bool reverse = (r->attr & TERM_ATTR_REVERSE) != 0;
 				uint32_t fg = reverse ? r->bg : r->fg;
 				uint32_t bg = reverse ? r->fg : r->bg;
@@ -365,14 +370,14 @@ static void run(void)
 					bg = tmp;
 				}
 
-				if (!r->dmg)
+				if (!r->dmg && !(wide && RUNE(&term, x + 1, y).dmg))
 					continue;
 
 				draw_rune(
 					win->bfb, win->stride, winh,
 					grid_x + x * font.cellw,
 					grid_y + y * font.cellh,
-					font.cellw, font.cellh, bg
+					font.cellw * (wide ? 2 : 1), font.cellh, bg
 				);
 
 				if (r->cp != ' ') {
@@ -386,6 +391,8 @@ static void run(void)
 				}
 
 				r->dmg = false;
+				if (wide)
+					RUNE(&term, x + 1, y).dmg = false;
 			}
 		}
 

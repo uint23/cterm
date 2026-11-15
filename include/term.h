@@ -53,6 +53,9 @@ typedef struct {
 	pid_t ptypid;
 
 	TState  state;
+	char    utf8_buf[5];
+	uint8_t utf8_len;
+	uint8_t utf8_need;
 	bool    acs[2];
 	int     charset;
 	int     charset_target;
