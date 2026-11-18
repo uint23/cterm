@@ -432,7 +432,7 @@ static void wait_events(void)
 	}
 
 	for (;;) {
-		int ret = poll(&pfd, 1, 1000 / win_fps);
+		int ret = poll(&pfd, 1, 1000 / polling_rate);
 		if (ret < 0 && errno == EINTR)
 			continue;
 		break;
