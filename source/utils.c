@@ -1,18 +1,21 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include "utils.h"
 
-/* perror `msg` and exit program with `ec` */
+/* print `msg` and exit program with `ec` */
 void die(int ec, const char* msg, ...)
 {
 	va_list args;
+
 	va_start(args, msg);
 	vfprintf(stderr, msg, args);
-	va_end(args); 
-	exit(ec);
-	perror(msg);
+	va_end(args);
+
+	fprintf(stderr, ": %s\n", strerror(errno));
 	exit(ec);
 }
 
