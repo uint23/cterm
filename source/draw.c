@@ -2,47 +2,25 @@
 
 static void draw_bitmap(uint32_t* dst, int w, int h, uint8_t* bmp,
                         int bw, int bh, int x, int y, uint32_t fg);
-static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
-                  uint32_t fg);
 
 /* draw bitmap of properties (look: vvvv) to screen */
 static void draw_bitmap(uint32_t* dst, int w, int h, uint8_t* bmp,
 		int bw, int bh, int x, int y, uint32_t fg)
 {
 	for (int by = 0; by < bh; by++) {
+		int py = y + by;
+		if (py < 0 || py >= h)
+			continue;
+
 		for (int bx = 0; bx < bw; bx++) {
-			uint8_t a = bmp[by * bw + bx];
-			blend(dst, w, h, x + bx, y + by, a, fg);
+			int px = x + bx;
+			if (px < 0 || px >= w)
+				continue;
+
+			if (bmp[by * bw + bx])
+				dst[py * w + px] = fg;
 		}
 	}
-}
-
-/* blend a pixel using alpha compositong */
-static void blend(uint32_t* dst, int w, int h, int x, int y, uint8_t alpha,
-                  uint32_t fg)
-{
-	uint8_t* px;
-	uint8_t fg_r;
-	uint8_t fg_g;
-	uint8_t fg_b;
-
-	if (x < 0 || x >= w || y < 0 || y >= h || alpha == 0)
-		return; /* transparent/oob */
-
-	/* ptr to px at (x, y) */
-	px = (uint8_t*)&dst[y * w + x];
-
-	/* unpack fg colour*/
-	fg_r = (uint8_t)(fg & 0xff);
-	fg_g = (uint8_t)((fg >> 8) & 0xff);
-	fg_b = (uint8_t)((fg >> 16) & 0xff);
-
-	/* alpha blend each channel */
-	px[0] = (uint8_t)((fg_r * alpha + px[0] * (255 - alpha)) / 255);
-	px[1] = (uint8_t)((fg_g * alpha + px[1] * (255 - alpha)) / 255);
-	px[2] = (uint8_t)((fg_b * alpha + px[2] * (255 - alpha)) / 255);
-
-	px[3] = 255;
 }
 
 void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
