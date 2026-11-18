@@ -396,7 +396,6 @@ static void run(void)
 			}
 		}
 
-		maus_target_fps(win, win_fps);
 		maus_present(win);
 
 		ocar = car;
