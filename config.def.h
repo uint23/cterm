@@ -10,7 +10,7 @@ static const char font_path[] = "monospace.bdf";
 static const int   win_width = 80;  /* in columns */
 static const int   win_height = 24; /* in rows */
 static const char  win_title[] = "cterm";
-static const int   win_fps = 60;
+static const int   win_fps = 256;
 static const int   padding = 8;
 
 static const char* const shell = NULL; /* NULL uses $SHELL */
