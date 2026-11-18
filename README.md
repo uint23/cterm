@@ -52,11 +52,16 @@ libmaus is a really small windowing library I made so that it can be cross
 platform.
 
 ### Info
+#### Font Support
 Only BDF fonts are supported as for now. If requested (or contributed), I have
 no problem with adding other formats but no vector font support! If you want to
 convert your vector font, you can use something like `otf2bdf`.
 > There is also a ![font scaling program](scripts/fontscale) provided which
 > uses `otf2ttf` to scale any font in a libary if needed.
+
+#### Polling Rate
+If your terminal feels sluggish, increasing `polling_rate`in the config may
+help.
 
 Reloading the font can be done with `AltR + r` by default. See the config for
 more info on keybinds
