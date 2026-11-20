@@ -398,6 +398,14 @@ static void run(void)
 			}
 		}
 
+		if (term.sixel.pixels) {
+			draw_sixel(
+				win->bfb, win->stride, winh,
+				&term.sixel,
+				grid_x + term.sixel_pos.x * font.cellw,
+				grid_y + term.sixel_pos.y * font.cellh
+			);
+		}
 		maus_present(win);
 
 		ocar = car;

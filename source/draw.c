@@ -1,4 +1,5 @@
 #include "draw.h"
+#include "sixel.h"
 
 static void draw_bitmap(uint32_t* dst, int w, int h, uint8_t* bmp,
                         int bw, int bh, int x, int y, uint32_t fg);
@@ -63,5 +64,25 @@ void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
 		dst, w, h, g->bmp, g->w, g->h, x + g->xoff,
 		baseline - g->yoff - g->h, fg
 	);
+}
+
+void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
+		int y)
+{
+	for (int row = 0; row < img->height; row++) {
+		int py = y + row;
+		if (py < 0 || py >= height)
+			continue;
+
+		for (int col = 0; col < img->width; col++) {
+			int px = x + col;
+			if (px < 0 || px >= stride)
+				continue;
+
+			uint32_t color = img->pixels[row * img->width + col];
+			if (color >> 24)
+				dst[py * stride + px] = color;
+		}
+	}
 }
 
