@@ -25,6 +25,7 @@ static void rune_prepare(Term* t, int x, int y);
 static void scroll_down(Term* t, int top, int bot, int n);
 static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
+static void sixel_clear(Term* t);
 
 /* TODO */
 static uint32_t acs_map(unsigned char ch)
@@ -89,9 +90,10 @@ static bool dcs_finish(Term* t, Caret* c)
 	if (t->dcs_sixel && t->dcs_len) {
 		Sixel img = sixel_decode(t->dcs_data, t->dcs_len);
 		if (img.pixels) {
-			free(t->sixel.pixels);
+			sixel_clear(t);
 			t->sixel = img;
 			t->sixel_pos = *c;
+			term_damage_all(t);
 			decoded = true;
 		}
 	}
@@ -120,6 +122,7 @@ static void alt_screen(Term* t, Caret* c, bool on)
 
 	if (!t->alt)
 		return;
+	sixel_clear(t);
 	free(t->runes);
 	t->runes = t->alt;
 	t->alt = NULL;
@@ -354,9 +357,12 @@ static void csi_reset(Term* t)
 static void erase_display(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
+	if (mode < 0 || mode > 3)
+		return;
 
 	/* mode 2: whole screen */
 	if (mode == 2 || mode == 3) {
+		sixel_clear(t);
 		for (int y = 0; y < t->rows; y++) {
 			for (int x = 0; x < t->cols; x++)
 				reset_rune(t, x, y);
@@ -388,6 +394,8 @@ static void erase_display(Term* t, Caret* c)
 static void erase_line(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
+	if (mode < 0 || mode > 2)
+		return;
 	int from = mode == 0 ? c->x : 0;
 	int to = mode == 1 ? c->x : t->cols - 1;
 
@@ -499,6 +507,7 @@ static void sgr(Term* t)
 
 void term_clear(Term* t, Caret* c)
 {
+	sixel_clear(t);
 	for (int y = 0; y < t->rows; y++) {
 		for (int x = 0; x < t->cols; x++)
 			reset_rune(t, x, y);
@@ -805,6 +814,7 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			}
 			else if (ch >= 0x40 && ch <= 0x7e) {
 				csi_dispatch(t, c, ch);
+				damaged = true;
 				t->state = TSTATE_NORMAL;
 			}
 			break;
@@ -881,5 +891,12 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 	}
 
 	return damaged;
+}
+
+/* discard the stored image */
+static void sixel_clear(Term* t)
+{
+	free(t->sixel.pixels);
+	t->sixel = (Sixel){ 0 };
 }
 
