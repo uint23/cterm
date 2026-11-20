@@ -60,7 +60,7 @@ static void cleanup(void)
 	free(term.runes);
 	free(term.alt);
 	free(term.dcs_data);
-	free(term.sixel.pixels);
+	sixel_free(&term.sixel);
 	font_free(&font);
 
 	if (win)

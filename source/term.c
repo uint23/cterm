@@ -25,8 +25,8 @@ static void rune_prepare(Term* t, int x, int y);
 static void scroll_down(Term* t, int top, int bot, int n);
 static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
-static void sixel_clear(Term* t);
 static void sixel_scroll(Term* t, int top, int bot, int lines);
+static int sixel_rows(const Term* t, const Sixel* img);
 
 /* TODO */
 static uint32_t acs_map(unsigned char ch)
@@ -91,9 +91,18 @@ static bool dcs_finish(Term* t, Caret* c)
 	if (t->dcs_sixel && t->dcs_len) {
 		Sixel img = sixel_decode(t->dcs_data, t->dcs_len);
 		if (img.pixels) {
-			sixel_clear(t);
+			Caret pos = *c;
+			int rows = sixel_rows(t, &img);
+
+			sixel_free(&t->sixel);
+			for (int row = 0; row < rows; row++) {
+				if (c->y == t->scroll_bot)
+					pos.y--;
+				term_putc(t, c, '\n');
+			}
+
 			t->sixel = img;
-			t->sixel_pos = *c;
+			t->sixel_pos = pos;
 			term_damage_all(t);
 			decoded = true;
 		}
@@ -123,7 +132,7 @@ static void alt_screen(Term* t, Caret* c, bool on)
 
 	if (!t->alt)
 		return;
-	sixel_clear(t);
+	sixel_free(&t->sixel);
 	free(t->runes);
 	t->runes = t->alt;
 	t->alt = NULL;
@@ -363,7 +372,7 @@ static void erase_display(Term* t, Caret* c)
 
 	/* mode 2: whole screen */
 	if (mode == 2 || mode == 3) {
-		sixel_clear(t);
+		sixel_free(&t->sixel);
 		for (int y = 0; y < t->rows; y++) {
 			for (int x = 0; x < t->cols; x++)
 				reset_rune(t, x, y);
@@ -510,7 +519,7 @@ static void sgr(Term* t)
 
 void term_clear(Term* t, Caret* c)
 {
-	sixel_clear(t);
+	sixel_free(&t->sixel);
 	for (int y = 0; y < t->rows; y++) {
 		for (int x = 0; x < t->cols; x++)
 			reset_rune(t, x, y);
@@ -903,11 +912,11 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 	return damaged;
 }
 
-/* discard the stored image */
-static void sixel_clear(Term* t)
+/* image height rounded up to terminal rows */
+static int sixel_rows(const Term* t, const Sixel* img)
 {
-	free(t->sixel.pixels);
-	t->sixel = (Sixel){ 0 };
+	int cellh = t->cellh > 0 ? t->cellh : 1;
+	return (img->height - 1) / cellh + 1;
 }
 
 /* move image with full-screen scrolling */
@@ -916,16 +925,15 @@ static void sixel_scroll(Term* t, int top, int bot, int lines)
 	if (!t->sixel.pixels)
 		return;
 
-	int cellh = t->cellh > 0 ? t->cellh : 1;
-	int rows = (t->sixel.height - 1) / cellh + 1;
+	int rows = sixel_rows(t, &t->sixel);
 	if (top != 0 || bot != t->rows - 1) {
 		if (t->sixel_pos.y + rows > top && t->sixel_pos.y <= bot)
-			sixel_clear(t);
+			sixel_free(&t->sixel);
 		return;
 	}
 
 	t->sixel_pos.y += lines;
 	if (t->sixel_pos.y >= t->rows || t->sixel_pos.y + rows <= 0)
-		sixel_clear(t);
+		sixel_free(&t->sixel);
 }
 
