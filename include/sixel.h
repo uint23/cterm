@@ -13,5 +13,8 @@ typedef struct {
 /* decode data stream into color buffer */
 Sixel sixel_decode(const char* data, size_t size);
 
+/* free sixel image */
+void sixel_free(Sixel* sixel);
+
 #endif /* SIXEL_H */
 

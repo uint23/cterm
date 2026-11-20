@@ -208,7 +208,17 @@ Sixel sixel_decode(const char* data, size_t size)
 	return img;
 
 fail:
-	free(img.pixels);
+	sixel_free(&img);
 	return (Sixel){ 0 };
+}
+
+void sixel_free(Sixel* sixel)
+{
+	if (sixel && sixel->pixels) {
+		free(sixel->pixels);
+		sixel->pixels = NULL;
+		sixel->width = 0;
+		sixel->height = 0;
+	}
 }
 
