@@ -21,7 +21,7 @@ void draw_codepoint(Fontface* face, uint32_t* dst, int w, int h, int x,
 
 /* draw sixel image to screen */
 void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
-		int y);
+		int y, int top, int bottom);
 
 #endif /* DRAW_H */
 

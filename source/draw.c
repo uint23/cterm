@@ -67,11 +67,11 @@ void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
 }
 
 void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
-		int y)
+		int y, int top, int bottom)
 {
 	for (int row = 0; row < img->height; row++) {
 		int py = y + row;
-		if (py < 0 || py >= height)
+		if (py < 0 || py >= height || py < top || py >= bottom)
 			continue;
 
 		for (int col = 0; col < img->width; col++) {

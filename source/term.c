@@ -26,6 +26,7 @@ static void scroll_down(Term* t, int top, int bot, int n);
 static void scroll_up(Term* t, int top, int bot, int n);
 static void sgr(Term* t);
 static void sixel_clear(Term* t);
+static void sixel_scroll(Term* t, int top, int bot, int lines);
 
 /* TODO */
 static uint32_t acs_map(unsigned char ch)
@@ -440,6 +441,7 @@ static void scroll_down(Term* t, int top, int bot, int n)
 		for (int x = 0; x < cols; x++)
 			reset_rune(t, x, y);
 	}
+	sixel_scroll(t, top, bot, n);
 	term_damage_all(t);
 }
 
@@ -459,6 +461,7 @@ static void scroll_up(Term* t, int top, int bot, int n)
 		for (int x = 0; x < cols; x++)
 			reset_rune(t, x, y);
 	}
+	sixel_scroll(t, top, bot, -n);
 	term_damage_all(t);
 }
 
@@ -738,8 +741,11 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 					t->utf8_len = 1;
 				}
 			}
-			else
+			else {
+				if (ch == '\n' && c->y == t->scroll_bot)
+					damaged = true;
 				term_putc(t, c, t->acs[t->charset] ? acs_map(ch) : ch);
+			}
 			break;
 
 		case TSTATE_ESC:
@@ -776,8 +782,10 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			}
 			else if (ch == 'M') {
 				t->wrapnext = false;
-				if (c->y == t->scroll_top)
+				if (c->y == t->scroll_top) {
 					scroll_down(t, t->scroll_top, t->scroll_bot, 1);
+					damaged = true;
+				}
 				else if (c->y > 0)
 					c->y--;
 				t->state = TSTATE_NORMAL;
@@ -786,8 +794,10 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				t->wrapnext = false;
 				if (ch == 'E')
 					c->x = 0;
-				if (c->y == t->scroll_bot)
+				if (c->y == t->scroll_bot) {
 					scroll_up(t, t->scroll_top, t->scroll_bot, 1);
+					damaged = true;
+				}
 				else if (c->y < t->rows - 1)
 					c->y++;
 				t->state = TSTATE_NORMAL;
@@ -898,5 +908,24 @@ static void sixel_clear(Term* t)
 {
 	free(t->sixel.pixels);
 	t->sixel = (Sixel){ 0 };
+}
+
+/* move image with full-screen scrolling */
+static void sixel_scroll(Term* t, int top, int bot, int lines)
+{
+	if (!t->sixel.pixels)
+		return;
+
+	int cellh = t->cellh > 0 ? t->cellh : 1;
+	int rows = (t->sixel.height - 1) / cellh + 1;
+	if (top != 0 || bot != t->rows - 1) {
+		if (t->sixel_pos.y + rows > top && t->sixel_pos.y <= bot)
+			sixel_clear(t);
+		return;
+	}
+
+	t->sixel_pos.y += lines;
+	if (t->sixel_pos.y >= t->rows || t->sixel_pos.y + rows <= 0)
+		sixel_clear(t);
 }
 

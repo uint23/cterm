@@ -51,6 +51,7 @@ typedef struct {
 
 	int cols;
 	int rows;
+	int cellh;
 	int scroll_top;
 	int scroll_bot;
 

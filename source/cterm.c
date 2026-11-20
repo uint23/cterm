@@ -137,6 +137,7 @@ static void init(void)
 	/* font */
 	if (font_load(&font, font_path) < 0)
 		die(1, "failed to load font");
+	term.cellh = font.cellh;
 
 	winw = win_width * font.cellw + 2 * padding;
 	winh = win_height * font.cellh + 2 * padding;
@@ -233,6 +234,7 @@ static bool reload_font(void)
 
 	font_free(&font);
 	font = next;
+	term.cellh = font.cellh;
 	resize_terminal(winw, winh);
 	term_damage_all(&term);
 
@@ -403,7 +405,8 @@ static void run(void)
 				win->bfb, win->stride, winh,
 				&term.sixel,
 				grid_x + term.sixel_pos.x * font.cellw,
-				grid_y + term.sixel_pos.y * font.cellh
+				grid_y + term.sixel_pos.y * font.cellh,
+				grid_y, grid_y + term.rows * font.cellh
 			);
 		}
 		maus_present(win);
