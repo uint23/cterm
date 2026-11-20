@@ -59,6 +59,8 @@ static void cleanup(void)
 {
 	free(term.runes);
 	free(term.alt);
+	free(term.dcs_data);
+	free(term.sixel.pixels);
 	font_free(&font);
 
 	if (win)

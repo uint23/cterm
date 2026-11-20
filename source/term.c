@@ -7,8 +7,12 @@
 #include "utf8.h"
 #include "utils.h"
 
-static int csi_arg(Term* t, int i, int fallback);
+#define DCS_MAX_SIZE (8 * 1024 * 1024)
+
 static void alt_screen(Term* t, Caret* c, bool on);
+static int csi_arg(Term* t, int i, int fallback);
+static void dcs_append(Term* t, unsigned char ch);
+static bool dcs_finish(Term* t, Caret* c);
 static void chars_insert(Term* t, Caret* c, int n);
 static void chars_delete(Term* t, Caret* c, int n);
 static uint32_t acs_map(unsigned char ch);
@@ -49,6 +53,52 @@ static int csi_arg(Term* t, int i, int fallback)
 		return fallback;
 
 	return t->csi_params[i];
+}
+
+/* buffer a SIXEL DCS payload */
+static void dcs_append(Term* t, unsigned char ch)
+{
+	if (!t->dcs_sixel)
+		return;
+	if (t->dcs_len >= DCS_MAX_SIZE) {
+		t->dcs_sixel = false;
+		return;
+	}
+	if (t->dcs_len == t->dcs_cap) {
+		size_t cap = t->dcs_cap ? t->dcs_cap * 2 : 4096;
+		if (cap > DCS_MAX_SIZE)
+			cap = DCS_MAX_SIZE;
+
+		char* data = realloc(t->dcs_data, cap);
+		if (!data) {
+			t->dcs_sixel = false;
+			return;
+		}
+		t->dcs_data = data;
+		t->dcs_cap = cap;
+	}
+
+	t->dcs_data[t->dcs_len++] = ch;
+}
+
+/* decode a complete SIXEL DCS */
+static bool dcs_finish(Term* t, Caret* c)
+{
+	bool decoded = false;
+
+	if (t->dcs_sixel && t->dcs_len) {
+		Sixel img = sixel_decode(t->dcs_data, t->dcs_len);
+		if (img.pixels) {
+			free(t->sixel.pixels);
+			t->sixel = img;
+			t->sixel_pos = *c;
+			decoded = true;
+		}
+	}
+
+	t->dcs_len = 0;
+	t->dcs_sixel = false;
+	return decoded;
 }
 
 /* TODO */
@@ -691,6 +741,11 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			else if (ch == ']') {
 				t->state = TSTATE_OSC;
 			}
+			else if (ch == 'P') {
+				t->dcs_len = 0;
+				t->dcs_sixel = true;
+				t->state = TSTATE_DCS;
+			}
 			else if (ch == '(') {
 				t->charset_target = 0;
 				t->state = TSTATE_CHARSET;
@@ -751,6 +806,52 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			else if (ch >= 0x40 && ch <= 0x7e) {
 				csi_dispatch(t, c, ch);
 				t->state = TSTATE_NORMAL;
+			}
+			break;
+
+		case TSTATE_DCS:
+			if (ch == '\x1b')
+				t->state = TSTATE_DCS_ESC;
+			else if (ch == 0x18 || ch == 0x1a || ch == 0x9c) {
+				t->dcs_len = 0;
+				t->state = TSTATE_NORMAL;
+			}
+			else if ((ch >= '0' && ch <= '9') || ch == ';') {
+				/* DCS parameters */
+			}
+			else if (ch >= 0x40 && ch <= 0x7e) {
+				t->dcs_sixel = t->dcs_sixel && ch == 'q';
+				t->state = TSTATE_DCS_DATA;
+			}
+			else
+				t->dcs_sixel = false;
+			break;
+
+		case TSTATE_DCS_DATA:
+			if (ch == '\x1b')
+				t->state = TSTATE_DCS_ESC;
+			else if (ch == 0x9c) {
+				damaged |= dcs_finish(t, c);
+				t->state = TSTATE_NORMAL;
+			}
+			else if (ch == 0x18 || ch == 0x1a) {
+				t->dcs_len = 0;
+				t->state = TSTATE_NORMAL;
+			}
+			else
+				dcs_append(t, ch);
+			break;
+
+		case TSTATE_DCS_ESC:
+			if (ch == '\\') {
+				damaged |= dcs_finish(t, c);
+				t->state = TSTATE_NORMAL;
+			}
+			else {
+				t->dcs_len = 0;
+				t->dcs_sixel = false;
+				t->state = TSTATE_ESC;
+				i--;
 			}
 			break;
 

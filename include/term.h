@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include "sixel.h"
+
 /* resolve 1D rune from 2D input */ 
 #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
 #define CSI_PARAMS_MAX (16)
@@ -16,6 +18,9 @@ typedef enum {
 	TSTATE_NORMAL,
 	TSTATE_ESC,
 	TSTATE_CSI,
+	TSTATE_DCS,
+	TSTATE_DCS_DATA,
+	TSTATE_DCS_ESC,
 	TSTATE_OSC,
 	TSTATE_OSC_ESC,
 	TSTATE_CHARSET,
@@ -64,6 +69,12 @@ typedef struct {
 	bool    bracketed_paste;
 	int     csi_params[CSI_PARAMS_MAX];
 	int     csi_idx;
+	char*   dcs_data;
+	size_t  dcs_len;
+	size_t  dcs_cap;
+	bool    dcs_sixel;
+	Sixel   sixel;
+	Caret   sixel_pos;
 } Term;
 
 /* clear screen by filling runes with ' ' and reseting
