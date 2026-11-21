@@ -5,7 +5,6 @@
 
 #define MAX_DIM    4096
 #define MAX_COLORS 256
-#define MAX_PIXELS (8 * 1024 * 1024)
 
 enum {
 	SIXEL_REPEAT = '!',
@@ -37,8 +36,8 @@ enum {
 #define COLOR_FMT_RGB 2
 
 static void draw_pixels(Sixel* img, int x, int y, int repeat, unsigned char c, uint32_t color);
-static uint32_t rgb(int r, int g, int b);
 static int parameters(const char* s, size_t len, size_t* i, int p[COLOR_PARAMS]);
+static uint32_t rgb(int r, int g, int b);
 static int tonum(const char* s, size_t len, size_t* i);
 
 static void draw_pixels(Sixel* img, int x, int y, int repeat, unsigned char c, uint32_t color)
@@ -80,6 +79,7 @@ static uint32_t rgb(int r, int g, int b)
 		((g * 255 / 100) << 8) |
 		(b * 255 / 100);
 }
+
 
 /* convert string to int strtol but limited by length, not nul termination and
    return integer */
@@ -196,7 +196,7 @@ Sixel sixel_decode(const char* data, size_t size)
 
 			if (!img.width || !img.height ||
 			    img.width > MAX_DIM || img.height > MAX_DIM ||
-			    img.width * img.height > MAX_PIXELS)
+			    img.width * img.height > SIXEL_MAX_PIXELS)
 				goto fail;
 
 			img.pixels = calloc(img.width * img.height, sizeof(*img.pixels));

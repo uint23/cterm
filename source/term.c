@@ -9,24 +9,28 @@
 
 #define DCS_MAX_SIZE (8 * 1024 * 1024)
 
-static void alt_screen(Term* t, Caret* c, bool on);
-static int csi_arg(Term* t, int i, int fallback);
-static void dcs_append(Term* t, unsigned char ch);
-static bool dcs_finish(Term* t, Caret* c);
-static void chars_insert(Term* t, Caret* c, int n);
-static void chars_delete(Term* t, Caret* c, int n);
 static uint32_t acs_map(unsigned char ch);
+static void alt_screen(Term* t, Caret* c, bool on);
+static void chars_shift(Term* t, Caret* c, int n, bool insert);
+static int csi_arg(Term* t, int i, int fallback);
 static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
 static void csi_reset(Term* t);
+static void dcs_append(Term* t, unsigned char ch);
+static bool dcs_finish(Term* t, Caret* c);
 static void erase_display(Term* t, Caret* c);
 static void erase_line(Term* t, Caret* c);
 static void reset_rune(Term* t, int x, int y);
 static void rune_prepare(Term* t, int x, int y);
-static void scroll_down(Term* t, int top, int bot, int n);
-static void scroll_up(Term* t, int top, int bot, int n);
+static void scroll_region(Term* t, int top, int bot, int lines);
 static void sgr(Term* t);
-static void sixel_scroll(Term* t, int top, int bot, int lines);
+static void sixel_add(Term* t, Sixel img, Caret pos);
+static void sixel_clear(SixelLayer* layer);
+static void sixel_erase(Term* t, int x, int y, int w, int h);
+static bool sixel_overlaps(const Term* t, const SixelView* view,
+                           int x, int y, int w, int h);
+static void sixel_remove(SixelLayer* layer, size_t i);
 static int sixel_rows(const Term* t, const Sixel* img);
+static void sixel_scroll(Term* t, int top, int bot, int lines);
 
 /* TODO */
 static uint32_t acs_map(unsigned char ch)
@@ -47,73 +51,6 @@ static uint32_t acs_map(unsigned char ch)
 }
 
 /* TODO */
-static int csi_arg(Term* t, int i, int fallback)
-{
-	if (i > t->csi_idx)
-		return fallback;
-	if (t->csi_params[i] == 0)
-		return fallback;
-
-	return t->csi_params[i];
-}
-
-/* buffer a SIXEL DCS payload */
-static void dcs_append(Term* t, unsigned char ch)
-{
-	if (!t->dcs_sixel)
-		return;
-	if (t->dcs_len >= DCS_MAX_SIZE) {
-		t->dcs_sixel = false;
-		return;
-	}
-	if (t->dcs_len == t->dcs_cap) {
-		size_t cap = t->dcs_cap ? t->dcs_cap * 2 : 4096;
-		if (cap > DCS_MAX_SIZE)
-			cap = DCS_MAX_SIZE;
-
-		char* data = realloc(t->dcs_data, cap);
-		if (!data) {
-			t->dcs_sixel = false;
-			return;
-		}
-		t->dcs_data = data;
-		t->dcs_cap = cap;
-	}
-
-	t->dcs_data[t->dcs_len++] = ch;
-}
-
-/* decode a complete SIXEL DCS */
-static bool dcs_finish(Term* t, Caret* c)
-{
-	bool decoded = false;
-
-	if (t->dcs_sixel && t->dcs_len) {
-		Sixel img = sixel_decode(t->dcs_data, t->dcs_len);
-		if (img.pixels) {
-			Caret pos = *c;
-			int rows = sixel_rows(t, &img);
-
-			sixel_free(&t->sixel);
-			for (int row = 0; row < rows; row++) {
-				if (c->y == t->scroll_bot)
-					pos.y--;
-				term_putc(t, c, '\n');
-			}
-
-			t->sixel = img;
-			t->sixel_pos = pos;
-			term_damage_all(t);
-			decoded = true;
-		}
-	}
-
-	t->dcs_len = 0;
-	t->dcs_sixel = false;
-	return decoded;
-}
-
-/* TODO */
 static void alt_screen(Term* t, Caret* c, bool on)
 {
 	Rune* tmp;
@@ -126,47 +63,49 @@ static void alt_screen(Term* t, Caret* c, bool on)
 			return;
 		t->alt = t->runes;
 		t->runes = tmp;
+		t->alt_sixels = t->sixels;
+		t->sixels = (SixelLayer){ 0 };
 		term_clear(t, c);
 		return;
 	}
 
 	if (!t->alt)
 		return;
-	sixel_free(&t->sixel);
+	sixel_clear(&t->sixels);
 	free(t->runes);
 	t->runes = t->alt;
 	t->alt = NULL;
+	t->sixels = t->alt_sixels;
+	t->alt_sixels = (SixelLayer){ 0 };
 	term_damage_all(t);
 }
 
-/* TODO */
-static void chars_insert(Term* t, Caret* c, int n)
+static void chars_shift(Term* t, Caret* c, int n, bool insert)
 {
 	int cols = t->cols - c->x;
 	Rune* line = &RUNE(t, 0, c->y);
-
 	if (n > cols)
 		n = cols;
-	memmove(&line[c->x + n], &line[c->x], sizeof(Rune) * (cols - n));
-	for (int x = c->x; x < c->x + n; x++)
+	sixel_erase(t, c->x, c->y, cols, 1);
+	int src = insert ? c->x : c->x + n;
+	int dst = insert ? c->x + n : c->x;
+	memmove(&line[dst], &line[src], sizeof(Rune) * (cols - n));
+	int clear = insert ? c->x : t->cols - n;
+	for (int x = clear; x < clear + n; x++)
 		reset_rune(t, x, c->y);
-	for (int x = c->x + n; x < t->cols; x++)
+	for (int x = c->x; x < t->cols; x++)
 		RUNE(t, x, c->y).dmg = true;
 }
 
 /* TODO */
-static void chars_delete(Term* t, Caret* c, int n)
+static int csi_arg(Term* t, int i, int fallback)
 {
-	int cols = t->cols - c->x;
-	Rune* line = &RUNE(t, 0, c->y);
+	if (i > t->csi_idx)
+		return fallback;
+	if (t->csi_params[i] == 0)
+		return fallback;
 
-	if (n > cols)
-		n = cols;
-	memmove(&line[c->x], &line[c->x + n], sizeof(Rune) * (cols - n));
-	for (int x = t->cols - n; x < t->cols; x++)
-		reset_rune(t, x, c->y);
-	for (int x = c->x; x < t->cols - n; x++)
-		RUNE(t, x, c->y).dmg = true;
+	return t->csi_params[i];
 }
 
 /* TODO */
@@ -175,7 +114,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	switch (ch) {
 	case '@': /* ICH - Insert Character */
 		t->wrapnext = false;
-		chars_insert(t, c, csi_arg(t, 0, 1));
+		chars_shift(t, c, csi_arg(t, 0, 1), true);
 		break;
 
 	case 'H': /* CUP - Cursor Position - ESC[row;colH */
@@ -208,11 +147,12 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 
 	case 'P': /* DCH - Delete Character */
 		t->wrapnext = false;
-		chars_delete(t, c, csi_arg(t, 0, 1));
+		chars_shift(t, c, csi_arg(t, 0, 1), false);
 		break;
 
 	case 'X': { /* ECH - Erase Character */
 		int n = csi_arg(t, 0, 1);
+		sixel_erase(t, c->x, c->y, n, 1);
 		for (int x = c->x; x < c->x + n && x < t->cols; x++)
 			reset_rune(t, x, c->y);
 		break;
@@ -287,23 +227,23 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	case 'L': /* IL - Insert Line */
 		t->wrapnext = false;
 		if (c->y >= t->scroll_top && c->y <= t->scroll_bot)
-			scroll_down(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
+			scroll_region(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
 		break;
 
 	case 'M': /* DL - Delete Line */
 		t->wrapnext = false;
 		if (c->y >= t->scroll_top && c->y <= t->scroll_bot)
-			scroll_up(t, c->y, t->scroll_bot, csi_arg(t, 0, 1));
+			scroll_region(t, c->y, t->scroll_bot, -csi_arg(t, 0, 1));
 		break;
 
 	case 'S': /* SU - Scroll Up */
 		t->wrapnext = false;
-		scroll_up(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
+		scroll_region(t, t->scroll_top, t->scroll_bot, -csi_arg(t, 0, 1));
 		break;
 
 	case 'T': /* SD - Scroll Down */
 		t->wrapnext = false;
-		scroll_down(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
+		scroll_region(t, t->scroll_top, t->scroll_bot, csi_arg(t, 0, 1));
 		break;
 
 	case 'h': /* set mode */
@@ -363,40 +303,73 @@ static void csi_reset(Term* t)
 	t->csi_idx = 0;
 }
 
+/* buffer a SIXEL DCS payload */
+static void dcs_append(Term* t, unsigned char ch)
+{
+	if (!t->dcs_sixel)
+		return;
+	if (t->dcs_len >= DCS_MAX_SIZE) {
+		t->dcs_sixel = false;
+		return;
+	}
+	if (t->dcs_len == t->dcs_cap) {
+		size_t cap = t->dcs_cap ? t->dcs_cap * 2 : 4096;
+		if (cap > DCS_MAX_SIZE)
+			cap = DCS_MAX_SIZE;
+
+		char* data = realloc(t->dcs_data, cap);
+		if (!data) {
+			t->dcs_sixel = false;
+			return;
+		}
+		t->dcs_data = data;
+		t->dcs_cap = cap;
+	}
+
+	t->dcs_data[t->dcs_len++] = ch;
+}
+
+/* decode a complete SIXEL DCS */
+static bool dcs_finish(Term* t, Caret* c)
+{
+	bool decoded = false;
+
+	if (t->dcs_sixel && t->dcs_len) {
+		Sixel img = sixel_decode(t->dcs_data, t->dcs_len);
+		if (img.pixels) {
+			int rows = sixel_rows(t, &img);
+			sixel_add(t, img, *c);
+			for (int row = 0; row < rows; row++)
+				term_putc(t, c, '\n');
+			term_damage_all(t);
+			decoded = true;
+		}
+	}
+
+	t->dcs_len = 0;
+	t->dcs_sixel = false;
+	return decoded;
+}
+
 /* TODO */
 static void erase_display(Term* t, Caret* c)
 {
 	int mode = csi_arg(t, 0, 0);
 	if (mode < 0 || mode > 3)
 		return;
-
-	/* mode 2: whole screen */
-	if (mode == 2 || mode == 3) {
-		sixel_free(&t->sixel);
-		for (int y = 0; y < t->rows; y++) {
-			for (int x = 0; x < t->cols; x++)
-				reset_rune(t, x, y);
-		}
-		return;
+	if (mode >= 2) {
+		sixel_clear(&t->sixels);
+		t->sixels_dirty = true;
 	}
-
-	/* mode 0: cursor to end of screen */
-	if (mode == 0) {
-		for (int y = c->y; y < t->rows; y++) {
-			int x0 = (y == c->y) ? c->x : 0;
-			for (int x = x0; x < t->cols; x++)
-				reset_rune(t, x, y);
-		}
-		return;
-	}
-
-	/* mode 1: start of screen to cursor */
-	if (mode == 1) {
-		for (int y = 0; y <= c->y; y++) {
-			int x1 = (y == c->y) ? c->x : t->cols - 1;
-			for (int x = 0; x <= x1; x++)
-				reset_rune(t, x, y);
-		}
+	for (int y = 0; y < t->rows; y++) {
+		if ((mode == 0 && y < c->y) || (mode == 1 && y > c->y))
+			continue;
+		int from = mode == 0 && y == c->y ? c->x : 0;
+		int to = mode == 1 && y == c->y ? c->x : t->cols - 1;
+		if (mode < 2)
+			sixel_erase(t, from, y, to - from + 1, 1);
+		for (int x = from; x <= to; x++)
+			reset_rune(t, x, y);
 	}
 }
 
@@ -408,6 +381,7 @@ static void erase_line(Term* t, Caret* c)
 		return;
 	int from = mode == 0 ? c->x : 0;
 	int to = mode == 1 ? c->x : t->cols - 1;
+	sixel_erase(t, from, c->y, to - from + 1, 1);
 
 	for (int x = from; x <= to; x++)
 		reset_rune(t, x, c->y);
@@ -434,43 +408,27 @@ static void rune_prepare(Term* t, int x, int y)
 		reset_rune(t, x + 1, y);
 }
 
-/* TODO */
-static void scroll_down(Term* t, int top, int bot, int n)
+/* scroll cells and their images through the same region */
+static void scroll_region(Term* t, int top, int bot, int lines)
 {
-	int cols = t->cols;
 	int rows = bot - top + 1;
-
+	int n = lines > 0 ? lines : -lines;
 	if (n > rows)
 		n = rows;
-	memmove(
-		&RUNE(t, 0, top + n), &RUNE(t, 0, top),
-		sizeof(Rune) * cols * (rows - n)
-	);
-	for (int y = top; y < top + n; y++) {
-		for (int x = 0; x < cols; x++)
+	if (!n)
+		return;
+	if (n < rows) {
+		int src = lines > 0 ? top : top + n;
+		int dst = lines > 0 ? top + n : top;
+		memmove(&RUNE(t, 0, dst), &RUNE(t, 0, src),
+		        sizeof(Rune) * t->cols * (rows - n));
+	}
+	int clear = lines > 0 ? top : bot - n + 1;
+	for (int y = clear; y < clear + n; y++) {
+		for (int x = 0; x < t->cols; x++)
 			reset_rune(t, x, y);
 	}
-	sixel_scroll(t, top, bot, n);
-	term_damage_all(t);
-}
-
-/* TODO */
-static void scroll_up(Term* t, int top, int bot, int n)
-{
-	int cols = t->cols;
-	int rows = bot - top + 1;
-
-	if (n > rows)
-		n = rows;
-	memmove(
-		&RUNE(t, 0, top), &RUNE(t, 0, top + n),
-		sizeof(Rune) * cols * (rows - n)
-	);
-	for (int y = bot - n + 1; y <= bot; y++) {
-		for (int x = 0; x < cols; x++)
-			reset_rune(t, x, y);
-	}
-	sixel_scroll(t, top, bot, -n);
+	sixel_scroll(t, top, bot, lines > 0 ? n : -n);
 	term_damage_all(t);
 }
 
@@ -517,9 +475,97 @@ static void sgr(Term* t)
 	}
 }
 
+static void sixel_add(Term* t, Sixel img, Caret pos)
+{
+	SixelLayer* layer = &t->sixels;
+	size_t pixels = (size_t)img.width * img.height;
+	while (layer->count && (layer->count == SIXEL_MAX_IMAGES ||
+	       layer->pixels > SIXEL_MAX_PIXELS - pixels))
+		sixel_remove(layer, 0);
+	layer->views[layer->count++] = (SixelView){ img, pos };
+	layer->pixels += pixels;
+}
+
+static void sixel_clear(SixelLayer* layer)
+{
+	for (size_t i = 0; i < layer->count; i++)
+		sixel_free(&layer->views[i].image);
+	*layer = (SixelLayer){ 0 };
+}
+
+static void sixel_erase(Term* t, int x, int y, int w, int h)
+{
+	if (w <= 0 || h <= 0)
+		return;
+	bool erased = false;
+	SixelLayer* layer = &t->sixels;
+	for (size_t i = 0; i < layer->count;) {
+		if (sixel_overlaps(t, &layer->views[i], x, y, w, h)) {
+			sixel_remove(layer, i);
+			erased = true;
+		}
+		else
+			i++;
+	}
+	if (erased)
+		term_damage_all(t);
+}
+
+static bool sixel_overlaps(const Term* t, const SixelView* view,
+                           int x, int y, int w, int h)
+{
+	int cw = t->cellw > 0 ? t->cellw : 1;
+	int cols = (view->image.width - 1) / cw + 1;
+	int rows = sixel_rows(t, &view->image);
+	return view->pos.x < x + w && view->pos.x + cols > x &&
+	       view->pos.y < y + h && view->pos.y + rows > y;
+}
+
+static void sixel_remove(SixelLayer* layer, size_t i)
+{
+	SixelView* view = &layer->views[i];
+	layer->pixels -= (size_t)view->image.width * view->image.height;
+	sixel_free(&view->image);
+	layer->count--;
+	memmove(view, view + 1, (layer->count - i) * sizeof(*view));
+}
+
+/* image height rounded up to terminal rows */
+static int sixel_rows(const Term* t, const Sixel* img)
+{
+	int cellh = t->cellh > 0 ? t->cellh : 1;
+	return (img->height - 1) / cellh + 1;
+}
+
+/* scroll images in the region; discard those cut by a partial region */
+static void sixel_scroll(Term* t, int top, int bot, int lines)
+{
+	SixelLayer* layer = &t->sixels;
+	bool partial = top != 0 || bot != t->rows - 1;
+	for (size_t i = 0; i < layer->count;) {
+		SixelView* view = &layer->views[i];
+		int rows = sixel_rows(t, &view->image);
+		int y = view->pos.y;
+		if (partial && (y + rows <= top || y > bot)) {
+			i++;
+			continue;
+		}
+		view->pos.y += lines;
+		if ((partial && (y < top || y + rows > bot + 1 ||
+		                  view->pos.y < top || view->pos.y + rows > bot + 1)) ||
+		    (!partial && (view->pos.y >= t->rows ||
+		                  view->pos.y + rows <= 0 || view->pos.x >= t->cols))) {
+			sixel_remove(layer, i);
+			continue;
+		}
+		i++;
+	}
+}
+
 void term_clear(Term* t, Caret* c)
 {
-	sixel_free(&t->sixel);
+	sixel_clear(&t->sixels);
+	t->sixels_dirty = true;
 	for (int y = 0; y < t->rows; y++) {
 		for (int x = 0; x < t->cols; x++)
 			reset_rune(t, x, y);
@@ -532,6 +578,7 @@ void term_clear(Term* t, Caret* c)
 
 void term_damage_all(Term* t)
 {
+	t->sixels_dirty = true;
 	for (int y = 0; y < t->rows; y++) {
 		for (int x = 0; x < t->cols; x++)
 			RUNE(t, x, y).dmg = true;
@@ -547,6 +594,23 @@ void term_damage_rune(Term* t, int x, int y)
 		RUNE(t, x - 1, y).dmg = true;
 	if (RUNE(t, x, y).width == 2 && x + 1 < t->cols)
 		RUNE(t, x + 1, y).dmg = true;
+	int first = RUNE(t, x, y).width == 0 && x > 0 ? x - 1 : x;
+	int width = RUNE(t, first, y).width == 2 ? 2 : 1;
+	for (size_t i = 0; i < t->sixels.count; i++) {
+		if (sixel_overlaps(t, &t->sixels.views[i], first, y, width, 1)) {
+			t->sixels_dirty = true;
+			break;
+		}
+	}
+}
+
+void term_free(Term* t)
+{
+	sixel_clear(&t->sixels);
+	sixel_clear(&t->alt_sixels);
+	free(t->runes);
+	free(t->alt);
+	free(t->dcs_data);
 }
 
 void term_putc(Term* t, Caret* c, uint32_t cp)
@@ -589,6 +653,7 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 			t->wrapnext = false;
 		}
 
+		sixel_erase(t, c->x, c->y, width, 1);
 		rune_prepare(t, c->x, c->y);
 		if (width == 2)
 			rune_prepare(t, c->x + 1, c->y);
@@ -630,6 +695,9 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 	int orows = t->rows;
 
 	if (t->alt) {
+		sixel_clear(&t->sixels);
+		t->sixels = t->alt_sixels;
+		t->alt_sixels = (SixelLayer){ 0 };
 		free(t->runes);
 		t->runes = t->alt;
 		t->alt = NULL;
@@ -642,21 +710,13 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 		rows = 1;
 
 	/* new */
-	Rune* nr = calloc(cols*rows, sizeof(*nr));
+	Rune* nr = malloc((size_t)cols * rows * sizeof(*nr));
 	if (!nr)
 		return -1;
-
-	for (int y = 0; y < rows; y++) {
-		for (int x = 0; x < cols; x++) {
-			Rune* r = &nr[y * cols + x];
-			r->cp = ' ';
-			r->fg = t->fg;
-			r->bg = t->bg;
-			r->attr = t->attr;
-			r->width = 1;
-			r->dmg = true;
-		}
-	}
+	Rune blank = { .cp = ' ', .fg = t->fg, .bg = t->bg,
+	               .attr = t->attr, .width = 1, .dmg = true };
+	for (int i = 0; i < cols * rows; i++)
+		nr[i] = blank;
 
 	if (or) {
 		int copyrows = orows < rows ? orows : rows;
@@ -666,10 +726,8 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 			memcpy( &nr[y * cols], &or[y * ocols], sizeof(Rune) * copycols);
 	}
 
-	for (int y = 0; y < rows; y++) {
-		for (int x = 0; x < cols; x++)
-			nr[y * cols + x].dmg = true;
-	}
+	for (int i = 0; i < cols * rows; i++)
+		nr[i].dmg = true;
 
 	free(or);
 
@@ -692,13 +750,15 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 		t->saved.x = cols - 1;
 	if (t->saved.y >= rows)
 		t->saved.y = rows - 1;
+	sixel_scroll(t, 0, rows - 1, 0);
+	t->sixels_dirty = true;
 
 	return 0;
 }
 
 void term_scroll(Term* t)
 {
-	scroll_up(t, t->scroll_top, t->scroll_bot, 1);
+	scroll_region(t, t->scroll_top, t->scroll_bot, -1);
 }
 
 bool term_write(Term* t, Caret* c, const char* s, size_t n)
@@ -724,6 +784,7 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 						else
 							term_putc(t, c, 0xfffd);
 						t->utf8_len = t->utf8_need = 0;
+						damaged = true;
 					}
 					break;
 				}
@@ -754,6 +815,8 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				if (ch == '\n' && c->y == t->scroll_bot)
 					damaged = true;
 				term_putc(t, c, t->acs[t->charset] ? acs_map(ch) : ch);
+				if (ch >= ' ' && ch < 0x7f)
+					damaged = true;
 			}
 			break;
 
@@ -792,7 +855,7 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 			else if (ch == 'M') {
 				t->wrapnext = false;
 				if (c->y == t->scroll_top) {
-					scroll_down(t, t->scroll_top, t->scroll_bot, 1);
+					scroll_region(t, t->scroll_top, t->scroll_bot, 1);
 					damaged = true;
 				}
 				else if (c->y > 0)
@@ -804,7 +867,7 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				if (ch == 'E')
 					c->x = 0;
 				if (c->y == t->scroll_bot) {
-					scroll_up(t, t->scroll_top, t->scroll_bot, 1);
+					scroll_region(t, t->scroll_top, t->scroll_bot, -1);
 					damaged = true;
 				}
 				else if (c->y < t->rows - 1)
@@ -910,30 +973,5 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 	}
 
 	return damaged;
-}
-
-/* image height rounded up to terminal rows */
-static int sixel_rows(const Term* t, const Sixel* img)
-{
-	int cellh = t->cellh > 0 ? t->cellh : 1;
-	return (img->height - 1) / cellh + 1;
-}
-
-/* move image with full-screen scrolling */
-static void sixel_scroll(Term* t, int top, int bot, int lines)
-{
-	if (!t->sixel.pixels)
-		return;
-
-	int rows = sixel_rows(t, &t->sixel);
-	if (top != 0 || bot != t->rows - 1) {
-		if (t->sixel_pos.y + rows > top && t->sixel_pos.y <= bot)
-			sixel_free(&t->sixel);
-		return;
-	}
-
-	t->sixel_pos.y += lines;
-	if (t->sixel_pos.y >= t->rows || t->sixel_pos.y + rows <= 0)
-		sixel_free(&t->sixel);
 }
 

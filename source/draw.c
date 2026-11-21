@@ -24,6 +24,25 @@ static void draw_bitmap(uint32_t* dst, int w, int h, uint8_t* bmp,
 	}
 }
 
+void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
+		int baseline, uint32_t cp, uint32_t fg)
+{
+	if (!f || !dst)
+		return;
+
+	if (!f->bdf || cp >= BDF_GLYPHS_MAX)
+		return;
+
+	BdfGlyph* g = &f->bdf[cp];
+	if (!g->valid)
+		return;
+
+	draw_bitmap(
+		dst, w, h, g->bmp, g->w, g->h, x + g->xoff,
+		baseline - g->yoff - g->h, fg
+	);
+}
+
 void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
                uint32_t bg)
 {
@@ -47,27 +66,8 @@ void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
 	}
 }
 
-void draw_codepoint(Fontface* f, uint32_t* dst, int w, int h, int x,
-		int baseline, uint32_t cp, uint32_t fg)
-{
-	if (!f || !dst)
-		return;
-
-	if (!f->bdf || cp >= BDF_GLYPHS_MAX)
-		return;
-
-	BdfGlyph* g = &f->bdf[cp];
-	if (!g->valid)
-		return;
-
-	draw_bitmap(
-		dst, w, h, g->bmp, g->w, g->h, x + g->xoff,
-		baseline - g->yoff - g->h, fg
-	);
-}
-
 void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
-		int y, int top, int bottom)
+		int y, int left, int top, int right, int bottom)
 {
 	for (int row = 0; row < img->height; row++) {
 		int py = y + row;
@@ -76,7 +76,7 @@ void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
 
 		for (int col = 0; col < img->width; col++) {
 			int px = x + col;
-			if (px < 0 || px >= stride)
+			if (px < 0 || px >= stride || px < left || px >= right)
 				continue;
 
 			uint32_t color = img->pixels[row * img->width + col];

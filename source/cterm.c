@@ -31,8 +31,8 @@ static bool ptyread(void);
 static void ptywrite(const char* s, size_t n);
 static bool reload_font(void);
 static void resize_pty(void);
-static int resize_window(int w, int h);
 static void resize_terminal(int w, int h);
+static int resize_window(int w, int h);
 static void run(void);
 static bool shell_exited(void);
 static void wait_events(void);
@@ -57,10 +57,7 @@ static Term term = {
 /* clean up resources */
 static void cleanup(void)
 {
-	free(term.runes);
-	free(term.alt);
-	free(term.dcs_data);
-	sixel_free(&term.sixel);
+	term_free(&term);
 	font_free(&font);
 
 	if (win)
@@ -137,6 +134,7 @@ static void init(void)
 	/* font */
 	if (font_load(&font, font_path) < 0)
 		die(1, "failed to load font");
+	term.cellw = font.cellw;
 	term.cellh = font.cellh;
 
 	winw = win_width * font.cellw + 2 * padding;
@@ -234,6 +232,7 @@ static bool reload_font(void)
 
 	font_free(&font);
 	font = next;
+	term.cellw = font.cellw;
 	term.cellh = font.cellh;
 	resize_terminal(winw, winh);
 	term_damage_all(&term);
@@ -255,25 +254,6 @@ static void resize_pty(void)
 		ioctl(term.ptyfd, TIOCSWINSZ, &ws);
 }
 
-/* resize window framebuffer to reflect resized size */
-static int resize_window(int w, int h)
-{
-	if (w < 1)
-		w = 1;
-	if (h < 1)
-		h = 1;
-
-	if (w == winw && h == winh)
-		return 0;
-
-	if (!maus_resize(win, w, h))
-		return -1;
-	winw = w;
-	winh = h;
-
-	return 0;
-}
-
 /* TODO */
 static void resize_terminal(int w, int h)
 {
@@ -292,6 +272,25 @@ static void resize_terminal(int w, int h)
 		die(1, "failed to resize terminal");
 
 	resize_pty();
+}
+
+/* resize window framebuffer to reflect resized size */
+static int resize_window(int w, int h)
+{
+	if (w < 1)
+		w = 1;
+	if (h < 1)
+		h = 1;
+
+	if (w == winw && h == winh)
+		return 0;
+
+	if (!maus_resize(win, w, h))
+		return -1;
+	winw = w;
+	winh = h;
+
+	return 0;
 }
 
 /* event loop (TODO) */
@@ -321,7 +320,7 @@ static void run(void)
 			}
 
 			if (ev.type == MAUS_EV_REDRAW) {
-				dirty = true;
+				dirty = redraw_all = true;
 				continue;
 			}
 
@@ -400,14 +399,19 @@ static void run(void)
 			}
 		}
 
-		if (term.sixel.pixels) {
-			draw_sixel(
-				win->bfb, win->stride, winh,
-				&term.sixel,
-				grid_x + term.sixel_pos.x * font.cellw,
-				grid_y + term.sixel_pos.y * font.cellh,
-				grid_y, grid_y + term.rows * font.cellh
-			);
+		if (term.sixels_dirty) {
+			for (size_t i = 0; i < term.sixels.count; i++) {
+				SixelView* view = &term.sixels.views[i];
+				draw_sixel(
+					win->bfb, win->stride, winh, &view->image,
+					grid_x + view->pos.x * font.cellw,
+					grid_y + view->pos.y * font.cellh,
+					grid_x, grid_y,
+					grid_x + term.cols * font.cellw,
+					grid_y + term.rows * font.cellh
+				);
+			}
+			term.sixels_dirty = false;
 		}
 		maus_present(win);
 

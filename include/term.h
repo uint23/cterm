@@ -10,6 +10,7 @@
 /* resolve 1D rune from 2D input */ 
 #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
 #define CSI_PARAMS_MAX (16)
+#define SIXEL_MAX_IMAGES 32
 #define TERM_DEFAULT_FG 0xffffffffu
 #define TERM_DEFAULT_BG 0xff222222u
 #define TERM_ATTR_REVERSE (1 << 0)
@@ -42,6 +43,17 @@ typedef struct {
 } Caret;
 
 typedef struct {
+	Sixel image;
+	Caret pos;
+} SixelView;
+
+typedef struct {
+	SixelView views[SIXEL_MAX_IMAGES];
+	size_t count;
+	size_t pixels;
+} SixelLayer;
+
+typedef struct {
 	Rune*    runes;
 	Rune*    alt;
 	Caret    saved;
@@ -51,6 +63,7 @@ typedef struct {
 
 	int cols;
 	int rows;
+	int cellw;
 	int cellh;
 	int scroll_top;
 	int scroll_bot;
@@ -58,24 +71,25 @@ typedef struct {
 	int   ptyfd;
 	pid_t ptypid;
 
-	TState  state;
-	char    utf8_buf[5];
-	uint8_t utf8_len;
-	uint8_t utf8_need;
-	bool    acs[2];
-	int     charset;
-	int     charset_target;
-	bool    wrapnext;
-	bool    cursor_visible;
-	bool    bracketed_paste;
-	int     csi_params[CSI_PARAMS_MAX];
-	int     csi_idx;
-	char*   dcs_data;
-	size_t  dcs_len;
-	size_t  dcs_cap;
-	bool    dcs_sixel;
-	Sixel   sixel;
-	Caret   sixel_pos;
+	TState     state;
+	char       utf8_buf[5];
+	uint8_t    utf8_len;
+	uint8_t    utf8_need;
+	bool       acs[2];
+	int        charset;
+	int        charset_target;
+	bool       wrapnext;
+	bool       cursor_visible;
+	bool       bracketed_paste;
+	int        csi_params[CSI_PARAMS_MAX];
+	int        csi_idx;
+	char*      dcs_data;
+	size_t     dcs_len;
+	size_t     dcs_cap;
+	bool       dcs_sixel;
+	SixelLayer sixels;
+	SixelLayer alt_sixels;
+	bool       sixels_dirty;
 } Term;
 
 /* clear screen by filling runes with ' ' and reseting
@@ -87,6 +101,9 @@ void term_damage_all(Term* t);
 
 /* damage a single cell on terminal */
 void term_damage_rune(Term* t, int x, int y);
+
+/* free terminal resources */
+void term_free(Term* t);
 
 /* put a character on terminal, handle placing special
    and normal characters */

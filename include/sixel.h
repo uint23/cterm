@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define SIXEL_MAX_PIXELS (8 * 1024 * 1024)
+
 typedef struct {
 	uint32_t* pixels;
 	int       width;
