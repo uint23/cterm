@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define CLAMP(n, min, max) ((n) < (min) ? (min) : (n) > (max) ? (max) : (n))
+
 /* perror `msg` and exit program with `ec`
    TODO? stdarg */
 void die(int ec, const char* msg, ...);

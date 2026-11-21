@@ -725,10 +725,10 @@ index ad6b752..e4be15a 100644
  		free(t->runes);
  		t->runes = t->alt;
  		t->alt = NULL;
-@@ -572,6 +751,8 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
- 		t->saved.x = cols - 1;
- 	if (t->saved.y >= rows)
- 		t->saved.y = rows - 1;
+@@ -516,6 +695,8 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
+ 	t->wrapnext = false;
+ 	t->saved.x = CLAMP(t->saved.x, 0, cols - 1);
+ 	t->saved.y = CLAMP(t->saved.y, 0, rows - 1);
 +	sixel_scroll(t, 0, rows - 1, 0);
 +	t->sixels_dirty = true;
  

@@ -103,20 +103,8 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 	case 'H': /* CUP - Cursor Position - ESC[row;colH */
 	case 'f': { /* HVP - Horizontal and Vertical Postion - ESC[row;colf */
 		t->wrapnext = false;
-		int row = csi_arg(t, 0, 1) - 1;
-		int col = csi_arg(t, 1, 1) - 1;
-
-		if (row < 0)
-			row = 0;
-		if (col < 0)
-			col = 0;
-		if (row >= t->rows)
-			row = t->rows - 1;
-		if (col >= t->cols)
-			col = t->cols - 1;
-
-		c->y = row;
-		c->x = col;
+		c->y = CLAMP(csi_arg(t, 0, 1) - 1, 0, t->rows - 1);
+		c->x = CLAMP(csi_arg(t, 1, 1) - 1, 0, t->cols - 1);
 		break;
 	}
 
@@ -144,67 +132,35 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
 		sgr(t);
 		break;
 
-	case 'A': { /* CUU - cursor up */
+	case 'A': /* CUU - cursor up */
 		t->wrapnext = false;
-		int n = csi_arg(t, 0, 1);
-		c->y -= n;
-		if (c->y < 0)
-			c->y = 0;
+		c->y = CLAMP(c->y - csi_arg(t, 0, 1), 0, t->rows - 1);
 		break;
-	}
 
-	case 'B': { /* CUD - cursor down */
+	case 'B': /* CUD - cursor down */
 		t->wrapnext = false;
-		int n = csi_arg(t, 0, 1);
-		c->y += n;
-		if (c->y >= t->rows)
-			c->y = t->rows - 1;
+		c->y = CLAMP(c->y + csi_arg(t, 0, 1), 0, t->rows - 1);
 		break;
-	}
 
-	case 'C': { /* CUF - cursor forward */
+	case 'C': /* CUF - cursor forward */
 		t->wrapnext = false;
-		int n = csi_arg(t, 0, 1);
-		c->x += n;
-		if (c->x >= t->cols)
-			c->x = t->cols - 1;
+		c->x = CLAMP(c->x + csi_arg(t, 0, 1), 0, t->cols - 1);
 		break;
-	}
 
-	case 'D': { /* CUB - cursor back */
-			  t->wrapnext = false;
-			  int n = csi_arg(t, 0, 1);
-			  c->x -= n;
-			  if (c->x < 0)
-				  c->x = 0;
-			  break;
-	}
+	case 'D': /* CUB - cursor back */
+		t->wrapnext = false;
+		c->x = CLAMP(c->x - csi_arg(t, 0, 1), 0, t->cols - 1);
+		break;
 
-	case 'G': { /* CHA - cursor horizontal absolute */
-			  t->wrapnext = false;
-			  int col = csi_arg(t, 0, 1) - 1;
+	case 'G': /* CHA - cursor horizontal absolute */
+		t->wrapnext = false;
+		c->x = CLAMP(csi_arg(t, 0, 1) - 1, 0, t->cols - 1);
+		break;
 
-			  if (col < 0)
-				  col = 0;
-			  if (col >= t->cols)
-				  col = t->cols - 1;
-
-			  c->x = col;
-			  break;
-	}
-
-	case 'd': { /* VPA - vertical position absolute */
-			  t->wrapnext = false;
-			  int row = csi_arg(t, 0, 1) - 1;
-
-			  if (row < 0)
-				  row = 0;
-			  if (row >= t->rows)
-				  row = t->rows - 1;
-
-			  c->y = row;
-			  break;
-	}
+	case 'd': /* VPA - vertical position absolute */
+		t->wrapnext = false;
+		c->y = CLAMP(csi_arg(t, 0, 1) - 1, 0, t->rows - 1);
+		break;
 
 	case 'L': /* IL - Insert Line */
 		t->wrapnext = false;
@@ -559,19 +515,11 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
 	t->scroll_top = 0;
 	t->scroll_bot = rows - 1;
 
-	if (c->x >= cols)
-		c->x = cols - 1;
-	if (c->y >= rows)
-		c->y = rows - 1;
-	if (c->x < 0)
-		c->x = 0;
-	if (c->y < 0)
-		c->y = 0;
+	c->x = CLAMP(c->x, 0, cols - 1);
+	c->y = CLAMP(c->y, 0, rows - 1);
 	t->wrapnext = false;
-	if (t->saved.x >= cols)
-		t->saved.x = cols - 1;
-	if (t->saved.y >= rows)
-		t->saved.y = rows - 1;
+	t->saved.x = CLAMP(t->saved.x, 0, cols - 1);
+	t->saved.y = CLAMP(t->saved.y, 0, rows - 1);
 
 	return 0;
 }
