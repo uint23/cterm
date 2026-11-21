@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <uleutf.h>
+
 #include "../config.h"
 #include "term.h"
-#include "utf8.h"
 #include "utils.h"
 
 #define DCS_MAX_SIZE (8 * 1024 * 1024)
@@ -642,7 +643,7 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
 			term_putc(t, c, '\n');
 		break;
 	default: {
-		int width = utf8codepointvisualwidth(cp);
+		int width = uleutf_codepointvisualwidth(cp);
 		if (width <= 0)
 			break;
 		if (width == 2 && t->cols < 2)
@@ -775,10 +776,10 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
 				if ((ch & 0xc0) == 0x80) {
 					t->utf8_buf[t->utf8_len++] = ch;
 					if (t->utf8_len == t->utf8_need) {
-						utf8_int32_t cp;
+						ule_i32 cp;
 						t->utf8_buf[t->utf8_len] = '\0';
-						if (utf8valid(t->utf8_buf) == NULL) {
-							utf8codepoint(t->utf8_buf, &cp);
+						if (uleutf_valid(t->utf8_buf) == NULL) {
+							uleutf_codepoint(t->utf8_buf, &cp);
 							term_putc(t, c, (uint32_t)cp);
 						}
 						else
