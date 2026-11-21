@@ -69,6 +69,9 @@ convert your vector font, you can use something like `otf2bdf`.
 If your terminal feels sluggish, increasing `polling_rate`in the config may
 help.
 
-Reloading the font can be done with `AltR + r` by default. See the config for
-more info on keybinds
+#### Keybinds
+Reloading the font can be done with `AltR + r` by default. You can also paste
+from clipboard with `Ctrl + Shift + V`
+
+See the config for more info on keybinds.
 
