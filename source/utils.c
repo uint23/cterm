@@ -29,12 +29,3 @@ uint32_t rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 		((uint32_t)b);
 }
 
-/* malloc, die on failure */
-void* xmalloc(size_t len)
-{
-	void* p = malloc(len);
-	if (!p)
-		die(EXIT_FAILURE, "malloc failed");
-	return p;
-}
-
