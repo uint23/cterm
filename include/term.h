@@ -11,8 +11,6 @@
 #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
 #define CSI_PARAMS_MAX (16)
 #define SIXEL_MAX_IMAGES 32
-#define TERM_DEFAULT_FG 0xffffffffu
-#define TERM_DEFAULT_BG 0xff222222u
 #define TERM_ATTR_REVERSE (1 << 0)
 
 typedef enum {
