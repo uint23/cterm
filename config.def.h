@@ -19,9 +19,6 @@ static const char term_name[] = "vt100";
 #define CTRL_DOWN  (win->key_syms[MAUS_KEY_CONTROL_L] || win->key_syms[MAUS_KEY_CONTROL_R])
 #define SHIFT_DOWN (win->key_syms[MAUS_KEY_SHIFT_L] || win->key_syms[MAUS_KEY_SHIFT_R])
 
-#define BIND_COPY  (CTRL_DOWN && SHIFT_DOWN && \
-                   (ev->key.key == MAUS_KEY_C || ev->key.key == MAUS_KEY_C_UP))
-
 #define BIND_PASTE (CTRL_DOWN && SHIFT_DOWN && \
                    (ev->key.key == MAUS_KEY_V || ev->key.key == MAUS_KEY_V_UP))
 
