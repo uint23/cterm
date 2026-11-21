@@ -6,6 +6,11 @@ macOS won't build as libmaus doesn't have implementations for it. If you would
 be interested in making one for your own platform, it would be amazing if you
 could contribute!
 
+##### Sixel
+cterm has Sixel support as a patch but isn't applied by default. To apply it,
+do `git apply patches/sixel-211126.patch` and to revert, pass the `-R` flag
+before the file path
+
 ##### OpenBSD
 If you're on X11, you may want to increase the shm buffer limit as you may only
 be able to open a few windows.
@@ -23,6 +28,7 @@ sysctl kern.shminfo.shmall=65536
 65536 is more than enough pages.
 
 ### Building:
+
 ``` sh
 meson setup build
 meson compile -C build
