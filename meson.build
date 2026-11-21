@@ -38,7 +38,6 @@ endif
 sources = [
   'source/cterm.c',
   'source/draw.c',
-  'source/font.c',
   'source/sixel.c',
   'source/term.c',
   'source/utils.c',

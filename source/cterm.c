@@ -17,14 +17,15 @@
 #include <unistd.h>
 
 #include <maus.h>
+#include <maus_font.h>
 
 #include "config.h"
 #include "draw.h"
-#include "font.h"
 #include "term.h"
 #include "utils.h"
 
 static void cleanup(void);
+static int font_cell_width(const MausFont* f);
 static bool handle_key(const MausEvent* ev);
 static void init(void);
 static bool ptyread(void);
@@ -37,7 +38,7 @@ static void run(void);
 static bool shell_exited(void);
 static void wait_events(void);
 
-static Fontface font;
+static MausFont* font;
 static Caret car;
 static Maus* win = NULL;
 static int winw;
@@ -58,10 +59,26 @@ static Term term = {
 static void cleanup(void)
 {
 	term_free(&term);
-	font_free(&font);
+	maus_font_free(font);
 
 	if (win)
 		maus_close(win);
+}
+
+/* get terminal cell width for ascii glyphs */
+static int font_cell_width(const MausFont* f)
+{
+	int width = 0;
+
+	if (f->glyphs[0] && f->glyphs[0][0]) {
+		for (int i = 32; i <= 126; i++) {
+			const MausGlyph* g = &f->glyphs[0][0][i];
+			if (g->valid && g->adv > width)
+				width = g->adv;
+		}
+	}
+
+	return width > 0 ? width : f->cellw;
 }
 
 /* dispatch correct keycode handling non ascii characters */
@@ -132,13 +149,14 @@ static void init(void)
 	setlocale(LC_CTYPE, "");
 
 	/* font */
-	if (font_load(&font, font_path) < 0)
+	font = maus_font_load(font_path);
+	if (!font)
 		die(1, "failed to load font");
-	term.cellw = font.cellw;
-	term.cellh = font.cellh;
+	term.cellw = font_cell_width(font);
+	term.cellh = font->cellh;
 
-	winw = win_width * font.cellw + 2 * padding;
-	winh = win_height * font.cellh + 2 * padding;
+	winw = win_width * term.cellw + 2 * padding;
+	winh = win_height * term.cellh + 2 * padding;
 
 	if (term_resize(&term, &car, win_width, win_height) < 0)
 		die(1, "failed to resize terminal");
@@ -226,14 +244,14 @@ static void ptywrite(const char* s, size_t n)
    in event of failure, current font will still be in use  */
 static bool reload_font(void)
 {
-	Fontface next;
-	if (font_load(&next, font_path) < 0)
+	MausFont* next = maus_font_load(font_path);
+	if (!next)
 		return false;
 
-	font_free(&font);
+	maus_font_free(font);
 	font = next;
-	term.cellw = font.cellw;
-	term.cellh = font.cellh;
+	term.cellw = font_cell_width(font);
+	term.cellh = font->cellh;
 	resize_terminal(winw, winh);
 	term_damage_all(&term);
 
@@ -257,8 +275,8 @@ static void resize_pty(void)
 /* TODO */
 static void resize_terminal(int w, int h)
 {
-	int cols = (w - 2 * padding) / font.cellw;
-	int rows = (h - 2 * padding) / font.cellh;
+	int cols = (w - 2 * padding) / term.cellw;
+	int rows = (h - 2 * padding) / term.cellh;
 
 	if (cols < 1)
 		cols = 1;
@@ -350,8 +368,8 @@ static void run(void)
 			term_damage_all(&term);
 		}
 
-		int grid_x = (winw - term.cols * font.cellw) / 2;
-		int grid_y = (winh - term.rows * font.cellh) / 2;
+		int grid_x = (winw - term.cols * term.cellw) / 2;
+		int grid_y = (winh - term.rows * term.cellh) / 2;
 
 		for (int y = 0; y < term.rows; y++) {
 			for (int x = 0; x < term.cols; x++) {
@@ -378,18 +396,19 @@ static void run(void)
 
 				draw_rune(
 					win->bfb, win->stride, winh,
-					grid_x + x * font.cellw,
-					grid_y + y * font.cellh,
-					font.cellw * (wide ? 2 : 1), font.cellh, bg
+					grid_x + x * term.cellw,
+					grid_y + y * term.cellh,
+					term.cellw * (wide ? 2 : 1), term.cellh, bg
 				);
 
 				if (r->cp != ' ') {
-					draw_codepoint(
-						&font, win->bfb, win->stride, winh,
-						grid_x + x * font.cellw,
-						grid_y + y * font.cellh + (int)font.asc,
+					maus_draw_char(
+						win, font,
+						grid_x + x * term.cellw,
+						grid_y + y * term.cellh,
 						r->cp,
-						fg
+						MAUS_COL_ARGB((fg >> 24) & 0xff, (fg >> 16) & 0xff,
+						              (fg >> 8) & 0xff, fg & 0xff)
 					);
 				}
 
@@ -404,11 +423,11 @@ static void run(void)
 				SixelView* view = &term.sixels.views[i];
 				draw_sixel(
 					win->bfb, win->stride, winh, &view->image,
-					grid_x + view->pos.x * font.cellw,
-					grid_y + view->pos.y * font.cellh,
+					grid_x + view->pos.x * term.cellw,
+					grid_y + view->pos.y * term.cellh,
 					grid_x, grid_y,
-					grid_x + term.cols * font.cellw,
-					grid_y + term.rows * font.cellh
+					grid_x + term.cols * term.cellw,
+					grid_y + term.rows * term.cellh
 				);
 			}
 			term.sixels_dirty = false;

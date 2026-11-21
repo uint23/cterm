@@ -32,7 +32,7 @@ If you don't have access to meson or don't want to install it, clone the
 libmaus repo and follow the manual build options there. An example compile for
 X11 would be like so:
 ``` sh
-cc -Iinclude source/cterm.c source/draw.c source/font.c source/term.c source/utils.c \
+cc -Iinclude source/cterm.c source/draw.c source/sixel.c source/term.c source/utils.c \
    /path/to/libmaus_x11.a -I/path/to/libmaus/include -I./ -lX11 -lXext -lXi -o cterm
 ```
 
