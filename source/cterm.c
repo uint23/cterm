@@ -418,20 +418,6 @@ static void run(void)
 			}
 		}
 
-		if (term.sixels_dirty) {
-			for (size_t i = 0; i < term.sixels.count; i++) {
-				SixelView* view = &term.sixels.views[i];
-				draw_sixel(
-					win->bfb, win->stride, winh, &view->image,
-					grid_x + view->pos.x * term.cellw,
-					grid_y + view->pos.y * term.cellh,
-					grid_x, grid_y,
-					grid_x + term.cols * term.cellw,
-					grid_y + term.rows * term.cellh
-				);
-			}
-			term.sixels_dirty = false;
-		}
 		maus_present(win);
 
 		ocar = car;

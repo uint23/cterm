@@ -3,15 +3,10 @@
 
 #include <stdint.h>
 
-#include "sixel.h"
 
 /* draw a run of properties (look: vvvv) to screen */
 void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
                uint32_t bg);
-
-/* draw sixel image to screen */
-void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
-		int y, int left, int top, int right, int bottom);
 
 #endif /* DRAW_H */
 

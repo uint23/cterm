@@ -1,0 +1,801 @@
+diff --git a/README.md b/README.md
+index f300bf3..2bd1ab5 100644
+--- a/README.md
++++ b/README.md
+@@ -32,7 +32,7 @@ If you don't have access to meson or don't want to install it, clone the
+ libmaus repo and follow the manual build options there. An example compile for
+ X11 would be like so:
+ ``` sh
+-cc -Iinclude source/cterm.c source/draw.c source/term.c source/utils.c \
++cc -Iinclude source/cterm.c source/draw.c source/sixel.c source/term.c source/utils.c \
+    /path/to/libmaus_x11.a -I/path/to/libmaus/include -I./ -lX11 -lXext -lXi -o cterm
+ ```
+ 
+diff --git a/include/draw.h b/include/draw.h
+index 895d7c7..7b45364 100644
+--- a/include/draw.h
++++ b/include/draw.h
+@@ -3,10 +3,15 @@
+ 
+ #include <stdint.h>
+ 
++#include "sixel.h"
+ 
+ /* draw a run of properties (look: vvvv) to screen */
+ void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
+                uint32_t bg);
+ 
++/* draw sixel image to screen */
++void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
++		int y, int left, int top, int right, int bottom);
++
+ #endif /* DRAW_H */
+ 
+diff --git a/include/sixel.h b/include/sixel.h
+new file mode 100644
+index 0000000..e04f7be
+--- /dev/null
++++ b/include/sixel.h
+@@ -0,0 +1,21 @@
++#ifndef SIXEL_H
++#define SIXEL_H
++
++#include <stdint.h>
++#include <stddef.h>
++
++#define SIXEL_MAX_PIXELS (8 * 1024 * 1024)
++
++typedef struct {
++	uint32_t* pixels;
++	int       width;
++	int       height;
++} Sixel;
++
++/* decode data stream into color buffer */
++Sixel sixel_decode(const char* data, size_t size);
++
++/* free sixel image */
++void sixel_free(Sixel* sixel);
++
++#endif /* SIXEL_H */
+diff --git a/include/term.h b/include/term.h
+index 6713ebc..5f44e42 100644
+--- a/include/term.h
++++ b/include/term.h
+@@ -5,15 +5,21 @@
+ #include <stdint.h>
+ #include <sys/types.h>
+ 
++#include "sixel.h"
++
+ /* resolve 1D rune from 2D input */ 
+ #define RUNE(t, x, y) ((t)->runes[(y) * (t)->cols + (x)])
+ #define CSI_PARAMS_MAX (16)
++#define SIXEL_MAX_IMAGES 32
+ #define TERM_ATTR_REVERSE (1 << 0)
+ 
+ typedef enum {
+ 	TSTATE_NORMAL,
+ 	TSTATE_ESC,
+ 	TSTATE_CSI,
++	TSTATE_DCS,
++	TSTATE_DCS_DATA,
++	TSTATE_DCS_ESC,
+ 	TSTATE_OSC,
+ 	TSTATE_OSC_ESC,
+ 	TSTATE_CHARSET,
+@@ -34,6 +40,17 @@ typedef struct {
+ 	int y;
+ } Caret;
+ 
++typedef struct {
++	Sixel image;
++	Caret pos;
++} SixelView;
++
++typedef struct {
++	SixelView views[SIXEL_MAX_IMAGES];
++	size_t count;
++	size_t pixels;
++} SixelLayer;
++
+ typedef struct {
+ 	Rune*    runes;
+ 	Rune*    alt;
+@@ -64,7 +81,13 @@ typedef struct {
+ 	bool       bracketed_paste;
+ 	int        csi_params[CSI_PARAMS_MAX];
+ 	int        csi_idx;
+-
++	char*      dcs_data;
++	size_t     dcs_len;
++	size_t     dcs_cap;
++	bool       dcs_sixel;
++	SixelLayer sixels;
++	SixelLayer alt_sixels;
++	bool       sixels_dirty;
+ } Term;
+ 
+ /* clear screen by filling runes with ' ' and reseting
+diff --git a/meson.build b/meson.build
+index 1ffa2f7..6e28787 100644
+--- a/meson.build
++++ b/meson.build
+@@ -38,6 +38,7 @@ endif
+ sources = [
+   'source/cterm.c',
+   'source/draw.c',
++  'source/sixel.c',
+   'source/term.c',
+   'source/utils.c',
+ ]
+diff --git a/source/cterm.c b/source/cterm.c
+index 6eb65ba..4f912e8 100644
+--- a/source/cterm.c
++++ b/source/cterm.c
+@@ -418,6 +418,20 @@ static void run(void)
+ 			}
+ 		}
+ 
++		if (term.sixels_dirty) {
++			for (size_t i = 0; i < term.sixels.count; i++) {
++				SixelView* view = &term.sixels.views[i];
++				draw_sixel(
++					win->bfb, win->stride, winh, &view->image,
++					grid_x + view->pos.x * term.cellw,
++					grid_y + view->pos.y * term.cellh,
++					grid_x, grid_y,
++					grid_x + term.cols * term.cellw,
++					grid_y + term.rows * term.cellh
++				);
++			}
++			term.sixels_dirty = false;
++		}
+ 		maus_present(win);
+ 
+ 		ocar = car;
+diff --git a/source/draw.c b/source/draw.c
+index 56ea3bd..91b3047 100644
+--- a/source/draw.c
++++ b/source/draw.c
+@@ -1,4 +1,5 @@
+ #include "draw.h"
++#include "sixel.h"
+ 
+ void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
+                uint32_t bg)
+@@ -23,3 +24,22 @@ void draw_rune(uint32_t* dst, int w, int h, int cl, int rw, int cw, int ch,
+ 	}
+ }
+ 
++void draw_sixel(uint32_t* dst, int stride, int height, const Sixel* img, int x,
++		int y, int left, int top, int right, int bottom)
++{
++	for (int row = 0; row < img->height; row++) {
++		int py = y + row;
++		if (py < 0 || py >= height || py < top || py >= bottom)
++			continue;
++
++		for (int col = 0; col < img->width; col++) {
++			int px = x + col;
++			if (px < 0 || px >= stride || px < left || px >= right)
++				continue;
++
++			uint32_t color = img->pixels[row * img->width + col];
++			if (color >> 24)
++				dst[py * stride + px] = color;
++		}
++	}
++}
+diff --git a/source/sixel.c b/source/sixel.c
+new file mode 100644
+index 0000000..6c37232
+--- /dev/null
++++ b/source/sixel.c
+@@ -0,0 +1,223 @@
++#include <stdint.h>
++#include <stdlib.h>
++
++#include "sixel.h"
++
++#define MAX_DIM    4096
++#define MAX_COLORS 256
++
++enum {
++	SIXEL_REPEAT = '!',
++	SIXEL_RASTER = '"',
++	SIXEL_COLOR  = '#',
++	SIXEL_CR     = '$',
++	SIXEL_NL     = '-',
++	SIXEL_FIRST  = '?',
++	SIXEL_LAST   = '~',
++};
++
++enum {
++	COLOR_PARAM_COLOR_REG,
++	COLOR_PARAM_COLOR_FMT,
++	COLOR_PARAM_RED_VAL,
++	COLOR_PARAM_GREEN_VAL,
++	COLOR_PARAM_BLUE_VAL,
++	COLOR_PARAMS,
++};
++
++enum {
++	RASTER_PARAM_ASPECT_X,
++	RASTER_PARAM_ASPECT_Y,
++	RASTER_PARAM_WIDTH,
++	RASTER_PARAM_HEIGHT,
++	RASTER_PARAMS, /* at least */
++};
++
++#define COLOR_FMT_RGB 2
++
++static void draw_pixels(Sixel* img, int x, int y, int repeat, unsigned char c, uint32_t color);
++static int parameters(const char* s, size_t len, size_t* i, int p[COLOR_PARAMS]);
++static uint32_t rgb(int r, int g, int b);
++static int tonum(const char* s, size_t len, size_t* i);
++
++static void draw_pixels(Sixel* img, int x, int y, int repeat, unsigned char c, uint32_t color)
++{
++	int bits = c - SIXEL_FIRST;
++
++	for (int dx = 0; dx < repeat && x + dx < img->width; dx++) {
++		for (int bit = 0; bit < 6 && y + bit < img->height; bit++) {
++			if (bits & (1 << bit))
++				img->pixels[(y + bit) * img->width + x + dx] = color;
++		}
++	}
++}
++
++/* store delimited parameters into array */
++static int parameters(const char* s, size_t len, size_t* i, int p[COLOR_PARAMS])
++{
++	int count = 0;
++
++	while (1) {
++		int value = tonum(s, len, i);
++		if (count < COLOR_PARAMS)
++			p[count] = value;
++		count++;
++
++		if (*i >= len || s[*i] != ';')
++			break;
++		(*i)++;
++	}
++
++	return count;
++}
++
++/* normalise r, g, b channels to 255 */
++static uint32_t rgb(int r, int g, int b)
++{
++	return 0xff000000 |
++		((r * 255 / 100) << 16) |
++		((g * 255 / 100) << 8) |
++		(b * 255 / 100);
++}
++
++
++/* convert string to int strtol but limited by length, not nul termination and
++   return integer */
++static int tonum(const char* s, size_t len, size_t* i)
++{
++	int n = 0;
++
++	while (*i < len && s[*i] >= '0' && s[*i] <= '9') {
++		int d = s[*i] - '0'; /* convert to integer */
++		if (n <= (MAX_DIM - d) / 10)
++			n = n * 10 + d;
++		else
++			n = MAX_DIM + 1;
++		(*i)++;
++	}
++
++	return n;
++}
++
++Sixel sixel_decode(const char* data, size_t size)
++{
++	Sixel img = { 0 };
++	if (!data)
++		return img;
++
++	uint32_t palette[MAX_COLORS];
++	for (int i = 0; i < MAX_COLORS; i++)
++		palette[i] = 0x00000000;
++
++	for (int pass = 0; pass < 2; pass++) {
++		int x = 0, y = 0, color = 0;
++		int width = 0, height = 0;
++
++		for (size_t i = 0; i < size;) {
++			unsigned char c = data[i++];
++			int repeat = 1;
++
++			switch (c) {
++			case SIXEL_CR:
++				x = 0;
++				continue;
++
++			case SIXEL_NL:
++				x = 0;
++				y += 6;
++				if (y > MAX_DIM)
++					goto fail;
++				continue;
++
++			case SIXEL_COLOR:
++			case SIXEL_RASTER: {
++				int p[COLOR_PARAMS] = { 0 };
++				int count = parameters(data, size, &i, p);
++
++				if (c == SIXEL_COLOR) {
++					color = p[COLOR_PARAM_COLOR_REG];
++					if (color >= MAX_COLORS)
++						goto fail;
++
++					if (pass == 1 && count >= COLOR_PARAMS &&
++					    p[COLOR_PARAM_COLOR_FMT] == COLOR_FMT_RGB &&
++					    p[COLOR_PARAM_RED_VAL]   <= 100 &&
++					    p[COLOR_PARAM_GREEN_VAL] <= 100 &&
++					    p[COLOR_PARAM_BLUE_VAL]  <= 100) {
++						palette[color] = rgb(
++							p[COLOR_PARAM_RED_VAL],
++							p[COLOR_PARAM_GREEN_VAL],
++							p[COLOR_PARAM_BLUE_VAL]);
++					}
++				}
++
++				/* raster attributes */
++				else if (count >= RASTER_PARAMS) {
++					width = p[RASTER_PARAM_WIDTH];
++					height = p[RASTER_PARAM_HEIGHT];
++				}
++				continue;
++			}
++
++			case SIXEL_REPEAT:
++				repeat = tonum(data, size, &i);
++				if (!repeat || i >= size)
++					goto fail;
++				c = data[i++];
++				break;
++
++			default:
++				break;
++			}
++
++			if (c < SIXEL_FIRST || c > SIXEL_LAST)
++				continue;
++			if (repeat > MAX_DIM - x || y > MAX_DIM - 6)
++				goto fail;
++
++			if (pass == 1) { /* pass 2 */
++				draw_pixels(&img, x, y, repeat, c, palette[color]);
++			}
++			else { /* (pass 1) measure image */
++				if (x + repeat > img.width)
++					img.width = x + repeat;
++				if (y + 6 > img.height)
++					img.height = y + 6;
++			}
++
++			x += repeat;
++		}
++
++		if (pass == 0) {
++			if (width > img.width)
++				img.width = width;
++			if (height > img.height)
++				img.height = height;
++
++			if (!img.width || !img.height ||
++			    img.width > MAX_DIM || img.height > MAX_DIM ||
++			    img.width * img.height > SIXEL_MAX_PIXELS)
++				goto fail;
++
++			img.pixels = calloc(img.width * img.height, sizeof(*img.pixels));
++			if (!img.pixels)
++				goto fail;
++		}
++	}
++
++	return img;
++
++fail:
++	sixel_free(&img);
++	return (Sixel){ 0 };
++}
++
++void sixel_free(Sixel* sixel)
++{
++	if (sixel && sixel->pixels) {
++		free(sixel->pixels);
++		sixel->pixels = NULL;
++		sixel->width = 0;
++		sixel->height = 0;
++	}
++}
+diff --git a/source/term.c b/source/term.c
+index ad6b752..e4be15a 100644
+--- a/source/term.c
++++ b/source/term.c
+@@ -8,18 +8,30 @@
+ #include "term.h"
+ #include "utils.h"
+ 
++#define DCS_MAX_SIZE (8 * 1024 * 1024)
++
+ static uint32_t acs_map(unsigned char ch);
+ static void alt_screen(Term* t, Caret* c, bool on);
+ static void chars_shift(Term* t, Caret* c, int n, bool insert);
+ static int csi_arg(Term* t, int i, int fallback);
+ static void csi_dispatch(Term* t, Caret* c, unsigned char ch);
+ static void csi_reset(Term* t);
++static void dcs_append(Term* t, unsigned char ch);
++static bool dcs_finish(Term* t, Caret* c);
+ static void erase_display(Term* t, Caret* c);
+ static void erase_line(Term* t, Caret* c);
+ static void reset_rune(Term* t, int x, int y);
+ static void rune_prepare(Term* t, int x, int y);
+ static void scroll_region(Term* t, int top, int bot, int lines);
+ static void sgr(Term* t);
++static void sixel_add(Term* t, Sixel img, Caret pos);
++static void sixel_clear(SixelLayer* layer);
++static void sixel_erase(Term* t, int x, int y, int w, int h);
++static bool sixel_overlaps(const Term* t, const SixelView* view,
++                           int x, int y, int w, int h);
++static void sixel_remove(SixelLayer* layer, size_t i);
++static int sixel_rows(const Term* t, const Sixel* img);
++static void sixel_scroll(Term* t, int top, int bot, int lines);
+ 
+ /* TODO */
+ static uint32_t acs_map(unsigned char ch)
+@@ -52,15 +64,20 @@ static void alt_screen(Term* t, Caret* c, bool on)
+ 			return;
+ 		t->alt = t->runes;
+ 		t->runes = tmp;
++		t->alt_sixels = t->sixels;
++		t->sixels = (SixelLayer){ 0 };
+ 		term_clear(t, c);
+ 		return;
+ 	}
+ 
+ 	if (!t->alt)
+ 		return;
++	sixel_clear(&t->sixels);
+ 	free(t->runes);
+ 	t->runes = t->alt;
+ 	t->alt = NULL;
++	t->sixels = t->alt_sixels;
++	t->alt_sixels = (SixelLayer){ 0 };
+ 	term_damage_all(t);
+ }
+ 
+@@ -70,6 +87,7 @@ static void chars_shift(Term* t, Caret* c, int n, bool insert)
+ 	Rune* line = &RUNE(t, 0, c->y);
+ 	if (n > cols)
+ 		n = cols;
++	sixel_erase(t, c->x, c->y, cols, 1);
+ 	int src = insert ? c->x : c->x + n;
+ 	int dst = insert ? c->x + n : c->x;
+ 	memmove(&line[dst], &line[src], sizeof(Rune) * (cols - n));
+@@ -135,6 +153,7 @@ static void csi_dispatch(Term* t, Caret* c, unsigned char ch)
+ 
+ 	case 'X': { /* ECH - Erase Character */
+ 		int n = csi_arg(t, 0, 1);
++		sixel_erase(t, c->x, c->y, n, 1);
+ 		for (int x = c->x; x < c->x + n && x < t->cols; x++)
+ 			reset_rune(t, x, c->y);
+ 		break;
+@@ -285,17 +304,71 @@ static void csi_reset(Term* t)
+ 	t->csi_idx = 0;
+ }
+ 
++/* buffer a SIXEL DCS payload */
++static void dcs_append(Term* t, unsigned char ch)
++{
++	if (!t->dcs_sixel)
++		return;
++	if (t->dcs_len >= DCS_MAX_SIZE) {
++		t->dcs_sixel = false;
++		return;
++	}
++	if (t->dcs_len == t->dcs_cap) {
++		size_t cap = t->dcs_cap ? t->dcs_cap * 2 : 4096;
++		if (cap > DCS_MAX_SIZE)
++			cap = DCS_MAX_SIZE;
++
++		char* data = realloc(t->dcs_data, cap);
++		if (!data) {
++			t->dcs_sixel = false;
++			return;
++		}
++		t->dcs_data = data;
++		t->dcs_cap = cap;
++	}
++
++	t->dcs_data[t->dcs_len++] = ch;
++}
++
++/* decode a complete SIXEL DCS */
++static bool dcs_finish(Term* t, Caret* c)
++{
++	bool decoded = false;
++
++	if (t->dcs_sixel && t->dcs_len) {
++		Sixel img = sixel_decode(t->dcs_data, t->dcs_len);
++		if (img.pixels) {
++			int rows = sixel_rows(t, &img);
++			sixel_add(t, img, *c);
++			for (int row = 0; row < rows; row++)
++				term_putc(t, c, '\n');
++			term_damage_all(t);
++			decoded = true;
++		}
++	}
++
++	t->dcs_len = 0;
++	t->dcs_sixel = false;
++	return decoded;
++}
++
+ /* TODO */
+ static void erase_display(Term* t, Caret* c)
+ {
+ 	int mode = csi_arg(t, 0, 0);
+ 	if (mode < 0 || mode > 3)
+ 		return;
++	if (mode >= 2) {
++		sixel_clear(&t->sixels);
++		t->sixels_dirty = true;
++	}
+ 	for (int y = 0; y < t->rows; y++) {
+ 		if ((mode == 0 && y < c->y) || (mode == 1 && y > c->y))
+ 			continue;
+ 		int from = mode == 0 && y == c->y ? c->x : 0;
+ 		int to = mode == 1 && y == c->y ? c->x : t->cols - 1;
++		if (mode < 2)
++			sixel_erase(t, from, y, to - from + 1, 1);
+ 		for (int x = from; x <= to; x++)
+ 			reset_rune(t, x, y);
+ 	}
+@@ -309,6 +382,7 @@ static void erase_line(Term* t, Caret* c)
+ 		return;
+ 	int from = mode == 0 ? c->x : 0;
+ 	int to = mode == 1 ? c->x : t->cols - 1;
++	sixel_erase(t, from, c->y, to - from + 1, 1);
+ 
+ 	for (int x = from; x <= to; x++)
+ 		reset_rune(t, x, c->y);
+@@ -355,6 +429,7 @@ static void scroll_region(Term* t, int top, int bot, int lines)
+ 		for (int x = 0; x < t->cols; x++)
+ 			reset_rune(t, x, y);
+ 	}
++	sixel_scroll(t, top, bot, lines > 0 ? n : -n);
+ 	term_damage_all(t);
+ }
+ 
+@@ -401,8 +476,97 @@ static void sgr(Term* t)
+ 	}
+ }
+ 
++static void sixel_add(Term* t, Sixel img, Caret pos)
++{
++	SixelLayer* layer = &t->sixels;
++	size_t pixels = (size_t)img.width * img.height;
++	while (layer->count && (layer->count == SIXEL_MAX_IMAGES ||
++	       layer->pixels > SIXEL_MAX_PIXELS - pixels))
++		sixel_remove(layer, 0);
++	layer->views[layer->count++] = (SixelView){ img, pos };
++	layer->pixels += pixels;
++}
++
++static void sixel_clear(SixelLayer* layer)
++{
++	for (size_t i = 0; i < layer->count; i++)
++		sixel_free(&layer->views[i].image);
++	*layer = (SixelLayer){ 0 };
++}
++
++static void sixel_erase(Term* t, int x, int y, int w, int h)
++{
++	if (w <= 0 || h <= 0)
++		return;
++	bool erased = false;
++	SixelLayer* layer = &t->sixels;
++	for (size_t i = 0; i < layer->count;) {
++		if (sixel_overlaps(t, &layer->views[i], x, y, w, h)) {
++			sixel_remove(layer, i);
++			erased = true;
++		}
++		else
++			i++;
++	}
++	if (erased)
++		term_damage_all(t);
++}
++
++static bool sixel_overlaps(const Term* t, const SixelView* view,
++                           int x, int y, int w, int h)
++{
++	int cw = t->cellw > 0 ? t->cellw : 1;
++	int cols = (view->image.width - 1) / cw + 1;
++	int rows = sixel_rows(t, &view->image);
++	return view->pos.x < x + w && view->pos.x + cols > x &&
++	       view->pos.y < y + h && view->pos.y + rows > y;
++}
++
++static void sixel_remove(SixelLayer* layer, size_t i)
++{
++	SixelView* view = &layer->views[i];
++	layer->pixels -= (size_t)view->image.width * view->image.height;
++	sixel_free(&view->image);
++	layer->count--;
++	memmove(view, view + 1, (layer->count - i) * sizeof(*view));
++}
++
++/* image height rounded up to terminal rows */
++static int sixel_rows(const Term* t, const Sixel* img)
++{
++	int cellh = t->cellh > 0 ? t->cellh : 1;
++	return (img->height - 1) / cellh + 1;
++}
++
++/* scroll images in the region; discard those cut by a partial region */
++static void sixel_scroll(Term* t, int top, int bot, int lines)
++{
++	SixelLayer* layer = &t->sixels;
++	bool partial = top != 0 || bot != t->rows - 1;
++	for (size_t i = 0; i < layer->count;) {
++		SixelView* view = &layer->views[i];
++		int rows = sixel_rows(t, &view->image);
++		int y = view->pos.y;
++		if (partial && (y + rows <= top || y > bot)) {
++			i++;
++			continue;
++		}
++		view->pos.y += lines;
++		if ((partial && (y < top || y + rows > bot + 1 ||
++		                  view->pos.y < top || view->pos.y + rows > bot + 1)) ||
++		    (!partial && (view->pos.y >= t->rows ||
++		                  view->pos.y + rows <= 0 || view->pos.x >= t->cols))) {
++			sixel_remove(layer, i);
++			continue;
++		}
++		i++;
++	}
++}
++
+ void term_clear(Term* t, Caret* c)
+ {
++	sixel_clear(&t->sixels);
++	t->sixels_dirty = true;
+ 	for (int y = 0; y < t->rows; y++) {
+ 		for (int x = 0; x < t->cols; x++)
+ 			reset_rune(t, x, y);
+@@ -415,6 +579,7 @@ void term_clear(Term* t, Caret* c)
+ 
+ void term_damage_all(Term* t)
+ {
++	t->sixels_dirty = true;
+ 	for (int y = 0; y < t->rows; y++) {
+ 		for (int x = 0; x < t->cols; x++)
+ 			RUNE(t, x, y).dmg = true;
+@@ -430,13 +595,23 @@ void term_damage_rune(Term* t, int x, int y)
+ 		RUNE(t, x - 1, y).dmg = true;
+ 	if (RUNE(t, x, y).width == 2 && x + 1 < t->cols)
+ 		RUNE(t, x + 1, y).dmg = true;
+-
++	int first = RUNE(t, x, y).width == 0 && x > 0 ? x - 1 : x;
++	int width = RUNE(t, first, y).width == 2 ? 2 : 1;
++	for (size_t i = 0; i < t->sixels.count; i++) {
++		if (sixel_overlaps(t, &t->sixels.views[i], first, y, width, 1)) {
++			t->sixels_dirty = true;
++			break;
++		}
++	}
+ }
+ 
+ void term_free(Term* t)
+ {
++	sixel_clear(&t->sixels);
++	sixel_clear(&t->alt_sixels);
+ 	free(t->runes);
+ 	free(t->alt);
++	free(t->dcs_data);
+ }
+ 
+ void term_putc(Term* t, Caret* c, uint32_t cp)
+@@ -479,6 +654,7 @@ void term_putc(Term* t, Caret* c, uint32_t cp)
+ 			t->wrapnext = false;
+ 		}
+ 
++		sixel_erase(t, c->x, c->y, width, 1);
+ 		rune_prepare(t, c->x, c->y);
+ 		if (width == 2)
+ 			rune_prepare(t, c->x + 1, c->y);
+@@ -520,6 +696,9 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
+ 	int orows = t->rows;
+ 
+ 	if (t->alt) {
++		sixel_clear(&t->sixels);
++		t->sixels = t->alt_sixels;
++		t->alt_sixels = (SixelLayer){ 0 };
+ 		free(t->runes);
+ 		t->runes = t->alt;
+ 		t->alt = NULL;
+@@ -572,6 +751,8 @@ int term_resize(Term* t, Caret* c, int cols, int rows)
+ 		t->saved.x = cols - 1;
+ 	if (t->saved.y >= rows)
+ 		t->saved.y = rows - 1;
++	sixel_scroll(t, 0, rows - 1, 0);
++	t->sixels_dirty = true;
+ 
+ 	return 0;
+ }
+@@ -648,6 +829,11 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
+ 			else if (ch == ']') {
+ 				t->state = TSTATE_OSC;
+ 			}
++			else if (ch == 'P') {
++				t->dcs_len = 0;
++				t->dcs_sixel = true;
++				t->state = TSTATE_DCS;
++			}
+ 			else if (ch == '(') {
+ 				t->charset_target = 0;
+ 				t->state = TSTATE_CHARSET;
+@@ -716,6 +902,52 @@ bool term_write(Term* t, Caret* c, const char* s, size_t n)
+ 			}
+ 			break;
+ 
++		case TSTATE_DCS:
++			if (ch == '\x1b')
++				t->state = TSTATE_DCS_ESC;
++			else if (ch == 0x18 || ch == 0x1a || ch == 0x9c) {
++				t->dcs_len = 0;
++				t->state = TSTATE_NORMAL;
++			}
++			else if ((ch >= '0' && ch <= '9') || ch == ';') {
++				/* DCS parameters */
++			}
++			else if (ch >= 0x40 && ch <= 0x7e) {
++				t->dcs_sixel = t->dcs_sixel && ch == 'q';
++				t->state = TSTATE_DCS_DATA;
++			}
++			else
++				t->dcs_sixel = false;
++			break;
++
++		case TSTATE_DCS_DATA:
++			if (ch == '\x1b')
++				t->state = TSTATE_DCS_ESC;
++			else if (ch == 0x9c) {
++				damaged |= dcs_finish(t, c);
++				t->state = TSTATE_NORMAL;
++			}
++			else if (ch == 0x18 || ch == 0x1a) {
++				t->dcs_len = 0;
++				t->state = TSTATE_NORMAL;
++			}
++			else
++				dcs_append(t, ch);
++			break;
++
++		case TSTATE_DCS_ESC:
++			if (ch == '\\') {
++				damaged |= dcs_finish(t, c);
++				t->state = TSTATE_NORMAL;
++			}
++			else {
++				t->dcs_len = 0;
++				t->dcs_sixel = false;
++				t->state = TSTATE_ESC;
++				i--;
++			}
++			break;
++
+ 		case TSTATE_OSC:
+ 			if (ch == '\a')
+ 				t->state = TSTATE_NORMAL;
