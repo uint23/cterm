@@ -24,7 +24,7 @@ if not fs.exists('config.h')
   configure_file(input: 'config.def.h', output: 'config.h', copy: true,)
 endif
 
-inc = include_directories('.', 'include')
+inc = include_directories('include')
 
 deps = [maus_dep]
 c_args = []

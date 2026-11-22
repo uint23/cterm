@@ -19,7 +19,7 @@
 #include <maus.h>
 #include <maus_font.h>
 
-#include "config.h"
+#include "../config.h"
 #include "draw.h"
 #include "term.h"
 #include "utils.h"
