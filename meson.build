@@ -31,7 +31,7 @@ c_args = []
 
 if host_machine.system() == 'linux'
   c_args += ['-D_XOPEN_SOURCE=700']
-elif host_machine.system() == 'freebsd' or host_machine.system() == 'openbsd'
+else
   deps += cc.find_library('util')
 endif
 

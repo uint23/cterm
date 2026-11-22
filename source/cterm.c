@@ -9,11 +9,15 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <time.h>
-#ifdef __linux__
+
+#if defined(__linux__)
 #include <pty.h>
+#elif defined(__FreeBSD__)
+#include <libutil.h>
 #else
 #include <util.h>
 #endif
+
 #include <unistd.h>
 
 #include <maus.h>
